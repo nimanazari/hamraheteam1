@@ -251,7 +251,7 @@ function renderBoard() {
         ${needsStudents(c) ? `<details class="n" onclick="event.stopPropagation()"><summary>🎒 ${fa(c.students.length)}</summary><div class="n">${c.students.map(s => `<span class="mini chip-in" draggable="true" data-type="student" data-id="${s.id}" data-from="${c.id}" title="${esc(s.name)} — بکشید تا خارج شود">${esc(s.name)}</span>`).join('')}</div></details>` : ''}
         ${warn ? `<div class="warn-tag">⚠️ ${warn}</div>` : ''}
         <label class="color-line" title="رنگ این کلاس"><input type="color" value="${cardColor(c)}" onclick="event.stopPropagation()" onmousedown="event.stopPropagation()" onchange="setClassColor(${c.id}, this.value)"></label>
-        <div class="open-only"><button class="btn sm" onclick="event.stopPropagation();openClass(${c.id})">✏️ ویرایش کامل</button></div>
+        <div class="open-only"><div class="handles"><span class="hmove" title="بکشید: جابه‌جایی ساعت (۳۰ دقیقه‌ای)" onmousedown="startDragTime(event, ${c.id}, 'move')">↕ جابه‌جایی</span><span class="hresize" title="بکشید: تغییر ساعت پایان" onmousedown="startDragTime(event, ${c.id}, 'end')">═ مدت</span></div><button class="btn sm" onclick="event.stopPropagation();openClass(${c.id})">✏️ ویرایش کامل</button></div>
       </div>`;
     }).join('')}</div></div>`;
   }).join('');
@@ -421,13 +421,13 @@ function bindDrops() {
   $$('.drop-day').forEach(col => {
     col.ondragover = e => { e.preventDefault(); col.classList.add('over'); };
     col.ondragleave = () => col.classList.remove('over');
-    col.ondrop = e => { e.preventDefault(); e.stopPropagation(); col.classList.remove('over'); const inner = col.querySelector('.col-in'); const r = inner.getBoundingClientRect(); const M = t => +t.slice(0, 2) * 60 + +t.slice(3); const g0 = M(meta.grid_start || '07:30'), g1 = M(meta.grid_end || '19:00'); let mins = g0 + Math.max(0, Math.min(1, (e.clientY - r.top) / r.height)) * (g1 - g0); mins = Math.round(mins / 30) * 30; const at = `${String(Math.floor(mins / 60)).padStart(2, '0')}:${String(mins % 60).padStart(2, '0')}`; handleDrop(JSON.parse(e.dataTransfer.getData('text/plain')), { day: +col.dataset.day, at }); };
+    col.ondrop = e => { if (!e._forwarded) { e.preventDefault(); e.stopPropagation(); } col.classList.remove('over'); const inner = col.querySelector('.col-in'); const r = inner.getBoundingClientRect(); const M = t => +t.slice(0, 2) * 60 + +t.slice(3); const g0 = M(meta.grid_start || '07:30'), g1 = M(meta.grid_end || '19:00'); let mins = g0 + Math.max(0, Math.min(1, (e.clientY - r.top) / r.height)) * (g1 - g0); mins = Math.round(mins / 30) * 30; const at = `${String(Math.floor(mins / 60)).padStart(2, '0')}:${String(mins % 60).padStart(2, '0')}`; handleDrop(JSON.parse(e.dataTransfer.getData('text/plain')), { day: +col.dataset.day, at }); };
     col.onclick = e => { if (picked && !e.target.closest('.cls')) { const p = picked; unpick(); handleDrop(p, { day: +col.dataset.day }); } };
   });
   $$('.drop-cls').forEach(card => {
     card.ondragover = e => { e.preventDefault(); e.stopPropagation(); card.classList.add('over'); };
     card.ondragleave = () => card.classList.remove('over');
-    card.ondrop = e => { e.preventDefault(); e.stopPropagation(); card.classList.remove('over'); card.closest('.drop-day').classList.remove('over'); handleDrop(JSON.parse(e.dataTransfer.getData('text/plain')), { cls: +card.dataset.cls }); };
+    card.ondrop = e => { e.preventDefault(); e.stopPropagation(); card.classList.remove('over'); const col = card.closest('.drop-day'); col.classList.remove('over'); const item = JSON.parse(e.dataTransfer.getData('text/plain')); if (item.type === 'class') return col.ondrop(Object.assign(e, { _forwarded: true })); handleDrop(item, { cls: +card.dataset.cls }); };
     card.ondragstart = e => { e.dataTransfer.setData('text/plain', JSON.stringify({ type: 'class', id: +card.dataset.cls })); card.classList.add('dragging'); };
     card.ondragend = () => card.classList.remove('dragging');
     card.onclick = e => { e.stopPropagation(); if (picked) { const p = picked; unpick(); return handleDrop(p, { cls: +card.dataset.cls }); } const was = card.classList.contains('open'); $$('.cls.open').forEach(x => x.classList.remove('open')); if (!was) card.classList.add('open'); };
@@ -547,6 +547,28 @@ async function setTime(id, start, end) {
 async function setClassColor(id, color) { const c = classes.find(x => x.id === id); const body = bodyOf(c); body.color = color; await api('/api/classes/' + id, 'PUT', { ...body, force: true }); reloadClasses(); }
 function togglePool(force) { const b = $('.board'); const open = force ?? !b.classList.contains('pool-open'); b.classList.toggle('pool-open', open); $('#pool-btn').classList.toggle('ghost', open); try { localStorage.setItem('poolOpen', open ? '1' : '0'); } catch {} }
 document.addEventListener('DOMContentLoaded', () => { try { togglePool(localStorage.getItem('poolOpen') === '1'); } catch { togglePool(false); } });
+function startDragTime(e, id, mode) {
+  e.preventDefault(); e.stopPropagation();
+  const c = classes.find(x => x.id === id); const card = e.target.closest('.cls'); const colIn = card.closest('.col-in'); const r = colIn.getBoundingClientRect();
+  const M = t => +t.slice(0, 2) * 60 + +t.slice(3), F = m => `${String(Math.floor(m / 60)).padStart(2, '0')}:${String(m % 60).padStart(2, '0')}`;
+  const g0 = M(meta.grid_start || '07:30'), g1 = M(meta.grid_end || '19:00'), span = g1 - g0, dur = M(c.end) - M(c.start);
+  card.draggable = false; card.classList.add('dragging-time');
+  const lbl = card.querySelector('.edit-line[data-edit=slot]');
+  let st = M(c.start), en = M(c.end);
+  const mv = ev => {
+    const mins = g0 + Math.max(0, Math.min(1, (ev.clientY - r.top) / r.height)) * span; const snap = Math.round(mins / 30) * 30;
+    if (mode === 'move') { st = Math.max(g0, Math.min(g1 - dur, snap)); en = st + dur; } else { en = Math.max(st + 30, Math.min(g1, snap)); }
+    card.style.top = ((st - g0) / span * 100).toFixed(3) + '%'; card.style.height = ((en - st) / span * 100).toFixed(3) + '%';
+    if (lbl) lbl.textContent = `⏰ ${fa(F(st))}–${fa(F(en))}`;
+  };
+  const up = async () => {
+    document.removeEventListener('mousemove', mv); document.removeEventListener('mouseup', up); card.draggable = true; card.classList.remove('dragging-time');
+    if (F(st) === c.start && F(en) === c.end) return;
+    const body = bodyOf(c); body.start = F(st); body.end = F(en);
+    try { await saveWithConfirm(body, id); await reloadClasses(); toast(`ساعت شد ${fa(F(st))} تا ${fa(F(en))}`, 'ok'); } catch (err) { renderBoard(); if (err.message !== 'cancel') toast(err.message, 'bad'); }
+  };
+  document.addEventListener('mousemove', mv); document.addEventListener('mouseup', up);
+}
 function toggleFull() { const el = $('#v-board'); if (document.fullscreenElement) document.exitFullscreen(); else el.requestFullscreen?.(); }
 document.addEventListener('click', e => { if (!e.target.closest('.cls')) $$('.cls.open').forEach(x => x.classList.remove('open')); });
 document.addEventListener('fullscreenchange', () => document.body.classList.toggle('fs', !!document.fullscreenElement));

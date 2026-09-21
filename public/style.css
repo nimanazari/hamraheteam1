@@ -447,3 +447,12 @@ body.fs .board{grid-template-columns:minmax(0,1fr) 260px}
 .board .tt .grid-lines.half{background-image:linear-gradient(to bottom,var(--line) 1px,transparent 1px);opacity:.45}
 .board .tt .grid-lines{opacity:.9}
 :root[data-theme=dark] .board .tt .grid-lines{opacity:.6}
+
+/* axis height = column height; drag handles */
+.board .tt .axis{display:flex;flex-direction:column;min-height:calc(100vh - 250px)}
+.board .tt .axis h4{visibility:hidden;margin:0 0 4px;padding:5px 4px;font-size:12.5px}
+.board .tt .axis-in{flex:1;min-height:0}
+.board .cls.open .handles{display:flex;gap:6px;justify-content:center;margin-bottom:6px}
+.board .cls.open .handles span{background:rgba(255,255,255,.28);padding:3px 9px;border-radius:8px;font-size:11px;font-weight:800;cursor:ns-resize;user-select:none}
+.board .cls.open .handles span:hover{background:rgba(255,255,255,.45)}
+.board .cls.dragging-time{opacity:.85;outline:3px dashed #fff;transition:none}
