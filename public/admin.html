@@ -142,8 +142,10 @@
         <div class="card"><h3>🎨 رنگ کارت‌ها</h3>
           <div class="grid2"><div class="field"><label>شروع محور ساعت تخته</label><input type="time" id="set-g0"></div><div class="field"><label>پایان محور ساعت</label><input type="time" id="set-g1"></div></div>
           <div class="field"><label>مبنای رنگ کلاس‌ها</label><select id="set-cmode"><option value="teacher">رنگ دبیر</option><option value="school">رنگ محل برگزاری</option></select></div>
-          <p class="muted" style="font-size:12px">رنگ هر دبیر از تب «دبیران» و رنگ هر محل از تب «مدارس» تغییر می‌کند. روی هر کارت هم می‌توانید رنگ جداگانه بگذارید (🎨 روی کارت).</p>
           <button class="btn" onclick="saveTerm()">ذخیره</button></div>
+        <div class="card" id="colors-card" style="grid-column:1/-1"><h3>🎨 رنگ‌ها</h3>
+          <p class="muted" style="font-size:12px">هر تغییر همان لحظه ذخیره می‌شود. رنگ کلاس (ستون سوم) بر رنگ دبیر و محل اولویت دارد؛ با ↺ به پیش‌فرض برمی‌گردد.</p>
+          <div class="grid3" id="colors-body"></div></div>
         <div class="card"><h3>ترم (تاریخ شمسی)</h3>
           <div class="field"><label>شروع ترم (۱ مهر)</label><input type="date" id="set-term"></div>
           <div class="field"><label>شروع کلاس‌ها</label><input type="date" id="set-cstart"></div>
@@ -202,7 +204,7 @@ async function loadAll() {
   ['#f-teacher', '#rep-teacher', '#c-teacher'].forEach(s => { const v = $(s).value; $(s).innerHTML = '<option value="">همه دبیران</option>' + tOpts; $(s).value = v; });
   ['#f-school', '#pool-school'].forEach(s => { const v = $(s).value; $(s).innerHTML = '<option value="">همه مدارس</option>' + sOpts; $(s).value = v; });
   if (ME && !ME.main) { $$('#v-settings .card').forEach(c => { if (/^رمز مدیر|تلگرام/.test(c.querySelector('h3')?.textContent || '')) c.style.display = 'none'; }); }
-  renderPerms();
+  renderPerms(); renderColors();
   $('#set-slots').value = meta.slots.join('\n'); $('#set-term').value = meta.term_start; $('#set-cstart').value = meta.classes_start; $('#set-end').value = meta.term_end; $('#set-cmode').value = meta.color_mode || 'teacher'; $('#set-g0').value = meta.grid_start || '07:30'; $('#set-g1').value = meta.grid_end || '19:00'; ['#set-term', '#set-cstart', '#set-end', '#pay-from', '#pay-to', '#rep-from', '#rep-to'].forEach(id => { const el = $(id); if (el && !el._j) jalaliInput(el); else if (el) el._j.value = jStr(el.value); }); updateBadge();
   renderBoard(); renderPool(); renderTeachers(); renderStudents(); renderSchools(); refreshUndo();
   if ($('#v-calendar').classList.contains('active')) renderCal();
@@ -250,7 +252,6 @@ function renderBoard() {
         <div class="s edit-line" data-edit="type" data-cls="${c.id}" title="کلیک: نوع کلاس">${TYPE_ICON[c.type] || '🤖'} ${TYPES[c.type] || 'رباتیک'}</div>
         ${needsStudents(c) ? `<details class="n" onclick="event.stopPropagation()"><summary>🎒 ${fa(c.students.length)}</summary><div class="n">${c.students.map(s => `<span class="mini chip-in" draggable="true" data-type="student" data-id="${s.id}" data-from="${c.id}" title="${esc(s.name)} — بکشید تا خارج شود">${esc(s.name)}</span>`).join('')}</div></details>` : ''}
         ${warn ? `<div class="warn-tag">⚠️ ${warn}</div>` : ''}
-        <label class="color-line" title="رنگ این کلاس"><input type="color" value="${cardColor(c)}" onclick="event.stopPropagation()" onmousedown="event.stopPropagation()" onchange="setClassColor(${c.id}, this.value)"></label>
         <div class="open-only"><div class="handles"><span class="hmove" title="بکشید: جابه‌جایی ساعت (۳۰ دقیقه‌ای)" onmousedown="startDragTime(event, ${c.id}, 'move')">↕ جابه‌جایی</span><span class="hresize" title="بکشید: تغییر ساعت پایان" onmousedown="startDragTime(event, ${c.id}, 'end')">═ مدت</span></div><button class="btn sm" onclick="event.stopPropagation();openClass(${c.id})">✏️ ویرایش کامل</button></div>
       </div>`;
     }).join('')}</div></div>`;
@@ -544,7 +545,7 @@ async function setTime(id, start, end) {
   if (body.start >= body.end) { toast('ساعت پایان باید بعد از شروع باشد', 'bad'); return renderBoard(); }
   try { await saveWithConfirm(body, id); await reloadClasses(); } catch (e) { renderBoard(); if (e.message !== 'cancel') toast(e.message, 'bad'); }
 }
-async function setClassColor(id, color) { const c = classes.find(x => x.id === id); const body = bodyOf(c); body.color = color; await api('/api/classes/' + id, 'PUT', { ...body, force: true }); reloadClasses(); }
+async function setClassColor(id, color) { const c = classes.find(x => x.id === id); const body = bodyOf(c); body.color = color; await api('/api/classes/' + id, 'PUT', { ...body, force: true }); await reloadClasses(); renderColors(); }
 function togglePool(force) { const b = $('.board'); const open = force ?? !b.classList.contains('pool-open'); b.classList.toggle('pool-open', open); $('#pool-btn').classList.toggle('ghost', open); try { localStorage.setItem('poolOpen', open ? '1' : '0'); } catch {} }
 document.addEventListener('DOMContentLoaded', () => { try { togglePool(localStorage.getItem('poolOpen') === '1'); } catch { togglePool(false); } });
 function startDragTime(e, id, mode) {
@@ -937,6 +938,14 @@ async function loadTg() {
 async function saveTg() { const b = { tg_bot_username: $('#tg-bot').value.trim(), tg_admin: $('#tg-admin').value.trim().replace('@', ''), tg_api_base: $('#tg-base').value.trim() }; if ($('#tg-token').value.trim()) b.tg_token = $('#tg-token').value.trim();
   for (const n of ['1', '2']) { b[`tg_relay${n}_url`] = $(`#r${n}-url`).value.trim(); b[`tg_relay${n}_ip`] = $(`#r${n}-ip`).value.trim(); b[`tg_relay${n}_insecure`] = $(`#r${n}-insecure`).value; b[`tg_relay${n}_enabled`] = $(`#r${n}-en`).checked ? '1' : '0'; if ($(`#r${n}-secret`).value.trim()) b[`tg_relay${n}_secret`] = $(`#r${n}-secret`).value.trim(); } await api('/api/telegram/settings', 'PUT', b); $('#tg-token').value = ''; toast('ذخیره شد', 'ok'); loadTg(); }
 async function testTg() { try { const r = await api('/api/telegram/test', 'POST'); toast(r.ok ? `✅ متصل: @${r.result.username}` : '❌ ' + (r.description || 'خطا'), r.ok ? 'ok' : 'bad'); } catch (e) { toast(e.message, 'bad'); } }
+function renderColors() {
+  const box = $('#colors-body'); if (!box) return;
+  const row = (label, color, onch, extra = '') => `<div class="crow"><input type="color" value="${color}" onchange="${onch}"><span>${label}</span>${extra}</div>`;
+  box.innerHTML = `<div><h4 class="muted">دبیران</h4>${teachers.map(t => row(esc(t.name), t.color || '#64748b', `setColor('teachers',${t.id},this.value)`)).join('')}</div>
+    <div><h4 class="muted">محل‌ها</h4>${schools.map(x => row(esc(x.name), x.color || '#64748b', `setColor('schools',${x.id},this.value)`)).join('')}</div>
+    <div><h4 class="muted">کلاس‌ها (رنگ اختصاصی)</h4>${classes.length ? classes.map(c => row(`${meta.days[c.day]} ${fa(c.start)} · ${esc(c.teacher_name || 'بدون دبیر')}${c.school_name ? ' · ' + esc(c.school_name) : ''}`, cardColor(c), `setClassColor(${c.id},this.value)`, c.color ? `<span class="x" title="پیش‌فرض" onclick="setClassColor(${c.id},null)">↺</span>` : '')).join('') : '<span class="muted">کلاسی نیست</span>'}</div>`;
+}
+async function setColor(table, id, color) { await api(`/api/${table}/${id}`, 'PUT', { color }); [teachers, schools, classes] = await Promise.all([api('/api/teachers'), api('/api/schools'), api('/api/classes')]); renderColors(); renderBoard(); renderPool(); toast('رنگ ذخیره شد', 'ok'); }
 function renderPerms() {
   const card = $('#perm-card'); if (!ME || !ME.main) { card.style.display = 'none'; return; }
   const keys = Object.keys(PERM_NAMES);

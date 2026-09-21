@@ -457,3 +457,9 @@ body.fs .board{grid-template-columns:minmax(0,1fr) 260px}
 .board .cls:hover{transform:none;box-shadow:0 2px 8px rgba(0,0,0,.14)}
 .board .cls .s.edit-line[data-edit=slot]{display:none}
 .board .cls.open .s.edit-line[data-edit=slot]{display:block}
+
+.board .cls .color-line{display:none}
+.crow{display:flex;align-items:center;gap:10px;padding:5px 0;border-bottom:1px solid var(--line);font-size:13px}
+.crow input[type=color]{width:34px;height:26px;padding:1px;border-radius:7px;border:1px solid var(--line);cursor:pointer;flex:0 0 auto}
+.crow .x{margin-right:auto;cursor:pointer;color:var(--muted)}.crow .x:hover{color:var(--bad)}
+#colors-body h4{margin:0 0 6px;font-size:12px}
