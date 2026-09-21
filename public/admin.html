@@ -222,7 +222,10 @@ function renderBoard() {
   const g0 = M(meta.grid_start || '07:30'), g1 = M(meta.grid_end || '19:00'), span = Math.max(60, g1 - g0);
   // hour axis
   let axis = '';
-  for (let m = Math.ceil(g0 / 60) * 60; m <= g1; m += 60) axis += `<div class="hr" style="top:${((m - g0) / span * 100).toFixed(3)}%">${fa(String(m / 60).padStart(2, '0'))}:۰۰</div>`;
+  const F = m => fa(`${String(Math.floor(m / 60)).padStart(2, '0')}:${String(m % 60).padStart(2, '0')}`);
+  const marks = new Set([g0, g1]); for (let m = Math.ceil(g0 / 60) * 60; m <= g1; m += 60) marks.add(m);
+  [...marks].sort((a, b) => a - b).forEach(m => { const edge = m === g0 || m === g1; axis += `<div class="hr ${edge ? 'edge' : ''}" style="top:${((m - g0) / span * 100).toFixed(3)}%">${F(m)}</div>`; });
+  for (let m = Math.ceil(g0 / 30) * 30; m < g1; m += 30) if (m % 60) axis += `<div class="hr half" style="top:${((m - g0) / span * 100).toFixed(3)}%"></div>`;
   $('#tt').innerHTML = `<div class="axis"><h4>&nbsp;</h4><div class="axis-in">${axis}</div></div>` + meta.days.map((d, i) => {
     const list = classes.filter(c => c.day === i && matchQ(c) && !((ft && c.teacher_id !== ft) || (fs && c.school_id !== fs))).sort((a, b) => M(a.start) - M(b.start) || M(b.end) - M(a.end));
     // overlap layout: greedy column assignment inside clusters
@@ -234,7 +237,7 @@ function renderBoard() {
       for (const c of cl) { let k = cols.findIndex(endAt => endAt <= M(c.start)); if (k < 0) { k = cols.length; cols.push(0); } cols[k] = M(c.end); placed.push({ c, k, n: 0, cl }); }
       cl.n = cols.length;
     }
-    const hourLines = `<div class="grid-lines" style="background-size:100% ${(60 / span * 100).toFixed(3)}%;background-position:0 ${((60 - (g0 % 60)) % 60) / span * 100}%"></div>`;
+    const hourLines = `<div class="grid-lines" style="background-size:100% ${(60 / span * 100).toFixed(3)}%;background-position:0 ${((60 - (g0 % 60)) % 60) / span * 100}%"></div><div class="grid-lines half" style="background-size:100% ${(60 / span * 100).toFixed(3)}%;background-position:0 ${((30 - (g0 % 60) + 60) % 60) / span * 100}%"></div>`;
     return `<div class="col drop-day ${i === td ? 'today' : ''}" data-day="${i}"><h4><span class="hb" title="کلاس جدید در ${d}" onclick="event.stopPropagation();newOnDay(${i})">＋</span>${d}<span class="hb" title="عملیات روی کل روز" onclick="event.stopPropagation();dayMenu(${i})">⋯</span></h4><div class="col-in">${hourLines}${placed.map(({ c, k, cl }) => {
       const st = Math.max(g0, M(c.start)), en = Math.min(g1, M(c.end)); if (en <= st) return '';
       const top = (st - g0) / span * 100, h = (en - st) / span * 100, w = 100 / cl.n, left = k * w;

@@ -436,3 +436,14 @@ body.fs .board{grid-template-columns:minmax(0,1fr) 260px}
 .board .cls.open .open-only{margin-top:6px;text-align:center}
 .board .cls.open .t{font-size:15px}.board .cls.open .s{font-size:12px}
 .board .cls{transition:box-shadow .15s}
+
+/* hour axis */
+.board .tt{grid-template-columns:54px repeat(7,minmax(0,1fr))}
+.board .tt .axis-in{border-left:2px solid var(--line)}
+.board .tt .hr{font-size:11px;color:var(--muted);opacity:.85;padding-left:6px;text-align:left}
+.board .tt .hr::after{content:'';position:absolute;left:-2px;top:50%;width:6px;height:2px;background:var(--line)}
+.board .tt .hr.edge{color:var(--accent);opacity:1;font-weight:900}
+.board .tt .hr.half::after{width:4px;opacity:.6}
+.board .tt .grid-lines.half{background-image:linear-gradient(to bottom,var(--line) 1px,transparent 1px);opacity:.45}
+.board .tt .grid-lines{opacity:.9}
+:root[data-theme=dark] .board .tt .grid-lines{opacity:.6}
