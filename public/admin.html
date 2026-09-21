@@ -162,6 +162,9 @@
           <div class="field"><label>آدرس API مستقیم (وقتی رله‌ای نیست)</label><input id="tg-base" dir="ltr"></div></details>
           <div class="row"><button class="btn" onclick="saveTg()">ذخیره</button><button class="btn ghost" onclick="testTg()">تست اتصال</button></div>
           <div id="tg-status" class="muted" style="font-size:12px;margin-top:8px"></div></div>
+        <div class="card" id="perm-card" style="grid-column:1/-1"><h3>🛡 سطح دسترسی مدیران</h3>
+          <p class="muted" style="font-size:12px">فقط مدیر اصلی این جدول را می‌بیند. تیک «مدیر» به دبیر پنل مدیر می‌دهد؛ بقیه ستون‌ها مشخص می‌کند کدام بخش‌ها را ببیند. تغییرات همان لحظه ذخیره می‌شود.</p>
+          <div style="overflow:auto"><table id="perm-table"></table></div></div>
         <div class="card"><h3>🔑 رمز عبور من</h3>
           <div class="field"><label>رمز فعلی</label><input type="password" id="my-old"></div>
           <div class="field"><label>رمز جدید</label><input type="password" id="my-new"></div>
@@ -196,6 +199,7 @@ async function loadAll() {
   ['#f-teacher', '#rep-teacher', '#c-teacher'].forEach(s => { const v = $(s).value; $(s).innerHTML = '<option value="">همه دبیران</option>' + tOpts; $(s).value = v; });
   ['#f-school', '#pool-school'].forEach(s => { const v = $(s).value; $(s).innerHTML = '<option value="">همه مدارس</option>' + sOpts; $(s).value = v; });
   if (ME && !ME.main) { $$('#v-settings .card').forEach(c => { if (/^رمز مدیر|تلگرام/.test(c.querySelector('h3')?.textContent || '')) c.style.display = 'none'; }); }
+  renderPerms();
   $('#set-slots').value = meta.slots.join('\n'); $('#set-term').value = meta.term_start; $('#set-cstart').value = meta.classes_start; $('#set-end').value = meta.term_end; $('#set-cmode').value = meta.color_mode || 'teacher'; ['#set-term', '#set-cstart', '#set-end', '#pay-from', '#pay-to', '#rep-from', '#rep-to'].forEach(id => { const el = $(id); if (el && !el._j) jalaliInput(el); else if (el) el._j.value = jStr(el.value); }); updateBadge();
   renderBoard(); renderPool(); renderTeachers(); renderStudents(); renderSchools(); refreshUndo();
   if ($('#v-calendar').classList.contains('active')) renderCal();
@@ -591,7 +595,10 @@ async function delClass(id) {
 }
 
 /* ================= STATS / EXPORT ================= */
-function renderStats() {
+async function renderStats() {
+  const ws = addDays(todayISO(), -todayDayIndex()); // this week's Saturday
+  const weekReps = await api('/api/reports?from=' + ws + '&to=' + addDays(ws, 6)).catch(() => []);
+  const durH = c => ((+c.end.slice(0, 2) * 60 + +c.end.slice(3)) - (+c.start.slice(0, 2) * 60 + +c.start.slice(3))) / 60;
   const active = students.filter(s => s.active), inactive = students.filter(s => !s.active);
   const stuClasses = s => classes.filter(c => c.student_ids.includes(s.id));
   const tClasses = t => classes.filter(c => c.teacher_id === t.id);
@@ -609,7 +616,8 @@ function renderStats() {
       <div class="card"><h3>محل‌ها</h3><table><tr><th>محل</th><th>کلاس</th><th>دانش‌آموز</th></tr>${bySchool.map(([k, n, m]) => `<tr><td>${esc(k)}</td><td>${fa(n)}</td><td>${fa(m)}</td></tr>`).join('')}</table></div>
     </div>
     <div class="grid2" style="margin-top:14px">
-      <div class="card"><h3>دبیران (${fa(teachers.length)})</h3><table><tr><th>دبیر</th><th>کلاس</th><th>روزها</th><th>دانش‌آموز</th></tr>${teachers.map(t => { const cs = tClasses(t); return `<tr style="${cs.length ? '' : 'background:#fff7ed'}"><td><span class="dot" style="background:${t.color}"></span>${esc(t.name)}${t.subject ? ' <span class="muted">· ' + esc(t.subject) + '</span>' : ''}</td><td>${fa(cs.length)}</td><td>${[...new Set(cs.map(c => meta.days[c.day]))].join('، ') || '<span class="muted">بدون کلاس</span>'}</td><td>${fa(new Set(cs.flatMap(c => c.student_ids)).size)}</td></tr>`; }).join('')}</table>
+      <div class="card" style="grid-column:1/-1"><h3>دبیران (${fa(teachers.length)}) · هفته جاری از ${jStr(ws)}</h3><table><tr><th>دبیر</th><th>کلاس در هفته</th><th>روزها</th><th>دانش‌آموز</th><th>ساعت برنامه هفته</th><th>انجام‌شده این هفته</th><th>باقی‌مانده</th><th>تا امروز باید می‌رفت</th></tr>${teachers.map(t => { const cs = tClasses(t); const plan = cs.reduce((a, c) => a + durH(c), 0); const dueSoFar = cs.filter(c => c.day <= todayDayIndex()).reduce((a, c) => a + durH(c), 0); const done = weekReps.filter(r => r.teacher_id === t.id).reduce((a, r) => a + (r.hours || 0), 0); const rem = Math.max(0, plan - done); return `<tr style="${cs.length ? '' : 'background:#fff7ed'}"><td><span class="dot" style="background:${t.color}"></span>${esc(t.name)}${t.subject ? ' <span class="muted">· ' + esc(t.subject) + '</span>' : ''}</td><td>${fa(cs.length)}</td><td>${[...new Set(cs.map(c => meta.days[c.day]))].join('، ') || '<span class="muted">بدون کلاس</span>'}</td><td>${fa(new Set(cs.flatMap(c => c.student_ids)).size)}</td><td><b>${fa(plan.toFixed(1))}</b></td><td style="color:var(--ok)"><b>${fa(done.toFixed(1))}</b></td><td style="color:${rem ? '#b45309' : 'var(--ok)'}">${fa(rem.toFixed(1))}</td><td class="muted">${fa(dueSoFar.toFixed(1))}${done + 0.01 < dueSoFar ? ' ⚠️' : ''}</td></tr>`; }).join('')}<tr><td><b>جمع</b></td><td>${fa(classes.length)}</td><td></td><td></td><td><b>${fa(classes.reduce((a, c) => a + durH(c), 0).toFixed(1))}</b></td><td><b>${fa(weekReps.reduce((a, r) => a + (r.hours || 0), 0).toFixed(1))}</b></td><td></td><td></td></tr></table>
+        <p class="muted" style="font-size:12px">ساعت برنامه = جمع مدت کلاس‌های هفتگی. انجام‌شده = ساعت ورود تا خروجی که دبیر در گزارش‌های همین هفته ثبت کرده. ⚠️ یعنی تا امروز کمتر از برنامه رفته.</p>
         ${tNo.length ? `<p class="muted" style="font-size:12px;margin-top:8px">⚠️ بدون کلاس: ${tNo.map(t => esc(t.name)).join('، ')}</p>` : ''}</div>
       <div class="card"><h3>دانش‌آموزان بدون کلاس (${fa(noCls.length)})</h3><div class="row" style="gap:6px">${noCls.map(s => `<span class="chip">${esc(s.name)}</span>`).join('') || '<span class="muted">همه دانش‌آموزهای فعال کلاس دارند 🎉</span>'}</div>
         ${inactive.length ? `<h3 style="margin-top:14px">غیرفعال (${fa(inactive.length)})</h3><div class="row" style="gap:6px">${inactive.map(s => `<span class="chip" style="opacity:.6">${esc(s.name)}${s.note ? ' · ' + esc(s.note) : ''}</span>`).join('')}</div>` : ''}</div>
@@ -880,6 +888,16 @@ async function loadTg() {
 async function saveTg() { const b = { tg_bot_username: $('#tg-bot').value.trim(), tg_admin: $('#tg-admin').value.trim().replace('@', ''), tg_api_base: $('#tg-base').value.trim() }; if ($('#tg-token').value.trim()) b.tg_token = $('#tg-token').value.trim();
   for (const n of ['1', '2']) { b[`tg_relay${n}_url`] = $(`#r${n}-url`).value.trim(); b[`tg_relay${n}_ip`] = $(`#r${n}-ip`).value.trim(); b[`tg_relay${n}_insecure`] = $(`#r${n}-insecure`).value; b[`tg_relay${n}_enabled`] = $(`#r${n}-en`).checked ? '1' : '0'; if ($(`#r${n}-secret`).value.trim()) b[`tg_relay${n}_secret`] = $(`#r${n}-secret`).value.trim(); } await api('/api/telegram/settings', 'PUT', b); $('#tg-token').value = ''; toast('ذخیره شد', 'ok'); loadTg(); }
 async function testTg() { try { const r = await api('/api/telegram/test', 'POST'); toast(r.ok ? `✅ متصل: @${r.result.username}` : '❌ ' + (r.description || 'خطا'), r.ok ? 'ok' : 'bad'); } catch (e) { toast(e.message, 'bad'); } }
+function renderPerms() {
+  const card = $('#perm-card'); if (!ME || !ME.main) { card.style.display = 'none'; return; }
+  const keys = Object.keys(PERM_NAMES);
+  $('#perm-table').innerHTML = `<tr><th>دبیر</th><th>مدیر</th>${keys.map(k => `<th>${PERM_NAMES[k]}</th>`).join('')}</tr>` + teachers.map(t => `<tr>
+    <td><span class="dot" style="background:${t.color}"></span>${esc(t.name)}</td>
+    <td><input type="checkbox" ${t.is_admin ? 'checked' : ''} onchange="setAdmin(${t.id}, this.checked)"></td>
+    ${keys.map(k => `<td><input type="checkbox" ${t.is_admin && (t.perms || []).includes(k) ? 'checked' : ''} ${t.is_admin ? '' : 'disabled'} onchange="togglePerm(${t.id}, '${k}', this.checked)"></td>`).join('')}</tr>`).join('');
+}
+async function setAdmin(id, on) { await api('/api/teachers/' + id, 'PUT', { is_admin: on ? 1 : 0, perms: on ? Object.keys(PERM_NAMES).filter(k => k !== 'payroll') : [] }); teachers = await api('/api/teachers'); renderPerms(); renderTeachers(); toast('ذخیره شد', 'ok'); }
+async function togglePerm(id, key, on) { const t = teacherById(id); const p = new Set(t.perms || []); on ? p.add(key) : p.delete(key); await api('/api/teachers/' + id, 'PUT', { perms: [...p] }); teachers = await api('/api/teachers'); renderPerms(); toast('ذخیره شد', 'ok'); }
 async function changeMyPass() {
   try { await api('/api/me/password', 'PUT', { old_password: $('#my-old').value, password: $('#my-new').value }); toast('رمز شما تغییر کرد ✅', 'ok'); $('#my-old').value = $('#my-new').value = ''; }
   catch (e) { toast(e.message, 'bad'); }
