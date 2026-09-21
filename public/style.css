@@ -264,3 +264,15 @@ body.dragging-in .pool-panel::before{content:'برای خارج کردن از ک
 .cls .color-line input[type=color]{width:26px;height:18px;padding:0;border:1px solid rgba(255,255,255,.6);border-radius:5px;background:transparent;cursor:pointer}
 .cls .color-line .x{font-size:12px;cursor:pointer}
 input[type=color].colorbox{width:32px;height:32px}
+
+/* card polish */
+.cls{display:flex;flex-direction:column}
+.cls .t{padding:2px 4px;text-align:center}
+.cls .t .chip-in{margin:0;padding:2px 10px;background:rgba(255,255,255,.18)}
+.cls .n{white-space:normal}
+.cls .n span{white-space:normal;line-height:1.5;max-width:100%}
+.cls .time-row{display:flex;align-items:center;gap:4px;flex-wrap:nowrap}
+.cls .time-row input[type=time]{width:auto;flex:1;min-width:0;padding:1px 4px;font-size:11px;border:0;border-radius:6px;background:rgba(255,255,255,.22);color:#fff;font-weight:700;text-align:center}
+.cls .time-row input[type=time]::-webkit-calendar-picker-indicator{filter:invert(1);opacity:.7;width:10px}
+.cls .time-row span{font-size:10px;opacity:.85}
+.cls .warn-tag{margin-top:auto}

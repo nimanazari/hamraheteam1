@@ -182,14 +182,15 @@ function renderBoard() {
       const hide = (ft && c.teacher_id !== ft) || (fs && c.school_id !== fs);
       if (hide) return '';
       const warn = cardWarn(c);
-      return `<div class="cls drop-cls ${warn ? 'warn' : ''}" draggable="true" data-cls="${c.id}" style="background:${cardColor(c)}" title="${esc(c.note)}">
+      const mins = Math.max(0, (+c.end.slice(0, 2) * 60 + +c.end.slice(3)) - (+c.start.slice(0, 2) * 60 + +c.start.slice(3)));
+      return `<div class="cls drop-cls ${warn ? 'warn' : ''}" draggable="true" data-cls="${c.id}" style="background:${cardColor(c)};min-height:${Math.round(100 + mins * 0.5)}px" title="${esc(c.note)}">
         <div class="t">${c.teacher_id ? `<span class="chip-in" draggable="true" data-type="teacher" data-id="${c.teacher_id}" data-from="${c.id}" title="بکشید تا از کلاس خارج شود">👤 ${esc(c.teacher_name)}</span>` : '<span class="faint">👤 بدون دبیر</span>'}</div>
         <div class="s edit-line" data-edit="school" data-cls="${c.id}" title="کلیک: انتخاب محل برگزاری">📍 ${c.school_name ? esc(c.school_name) : '<span class="faint">محل برگزاری؟</span>'}</div>
         <div class="s edit-line" data-edit="title" data-cls="${c.id}" title="کلیک: نام کلاس">🏷 ${c.title ? esc(c.title) : '<span class="faint">نام کلاس (دلخواه)</span>'}</div>
         <div class="s edit-line" data-edit="type" data-cls="${c.id}" title="کلیک: نوع کلاس">${TYPE_ICON[c.type] || '🤖'} ${TYPES[c.type] || 'رباتیک'}</div>
-        <div class="s edit-line" data-edit="slot" data-cls="${c.id}" title="کلیک: تغییر ساعت">⏰ ${fa(c.start)} تا ${fa(c.end)}</div>
+        <div class="s time-row" onclick="event.stopPropagation()" onmousedown="event.stopPropagation()">⏰ <input type="time" value="${c.start}" step="300" onchange="setTime(${c.id}, this.value, null)"><span>تا</span><input type="time" value="${c.end}" step="300" onchange="setTime(${c.id}, null, this.value)"></div>
         <label class="s color-line" title="رنگ این کلاس"><span>🎨</span><input type="color" value="${cardColor(c)}" onclick="event.stopPropagation()" onmousedown="event.stopPropagation()" onchange="setClassColor(${c.id}, this.value)">${c.color ? `<span class="x" onclick="event.stopPropagation();setClassColor(${c.id}, null)" title="برگشت به رنگ پیش‌فرض">↺</span>` : ''}</label>
-        ${needsStudents(c) ? `<div class="n"><span>${fa(c.students.length)} دانش‌آموز</span>${c.students.map(s => `<span class="mini chip-in" draggable="true" data-type="student" data-id="${s.id}" data-from="${c.id}" title="${esc(s.name)} — بکشید تا خارج شود">${esc(s.name)}</span>`).join('')}</div>` : '<div class="n"><span>فقط مدرسه · بدون دانش‌آموز</span></div>'}
+        ${needsStudents(c) ? `<div class="n"><span>${fa(c.students.length)} دانش‌آموز</span>${c.students.map(s => `<span class="mini chip-in" draggable="true" data-type="student" data-id="${s.id}" data-from="${c.id}" title="${esc(s.name)} — بکشید تا خارج شود">${esc(s.name)}</span>`).join('')}</div>` : '<div class="n"><span>🏫 عمومی، بدون دانش‌آموز</span></div>'}
         ${warn ? `<div class="warn-tag">⚠️ ${warn}</div>` : ''}
       </div>`;
     }).join('')}</div>`).join('') || '<p class="empty">اینجا رها کنید</p>'}</div>`;
@@ -473,6 +474,11 @@ async function bulk(action, from_day) {
   if (action === 'clear' && !confirm(`همه کلاس‌های ${meta.days[from_day]} حذف شوند؟ (قابل برگشت با ↶)`)) return;
   try { const r = await api('/api/classes/bulk', 'POST', { action, from_day, to_day }); closeModal(); toast(`${fa(r.count)} کلاس ${action === 'move' ? 'منتقل شد' : action === 'copy' ? 'کپی شد' : 'حذف شد'}`, 'ok'); reloadClasses(); }
   catch (e) { toast(e.message, 'bad'); }
+}
+async function setTime(id, start, end) {
+  const c = classes.find(x => x.id === id); const body = bodyOf(c); if (start) body.start = start; if (end) body.end = end;
+  if (body.start >= body.end) { toast('ساعت پایان باید بعد از شروع باشد', 'bad'); return renderBoard(); }
+  try { await saveWithConfirm(body, id); await reloadClasses(); } catch (e) { renderBoard(); if (e.message !== 'cancel') toast(e.message, 'bad'); }
 }
 async function setClassColor(id, color) { const c = classes.find(x => x.id === id); const body = bodyOf(c); body.color = color; await api('/api/classes/' + id, 'PUT', { ...body, force: true }); reloadClasses(); }
 async function undo() { try { const r = await api('/api/undo', 'POST'); toast('برگشت: ' + r.label, 'ok'); reloadClasses(); } catch (e) { toast(e.message, 'bad'); } }
