@@ -420,13 +420,13 @@ app.get('/api/telegram/me', requireAuth, (req, res) => {
   res.json({ linked: !!t.tg_chat_id, code: t.tg_chat_id ? null : t.tg_code, bot: setting('tg_bot_username', 'hamraheteam_bot') });
 });
 app.post('/api/telegram/unlink', requireAuth, (req, res) => { if (req.user.teacher_id) db.prepare('UPDATE teachers SET tg_chat_id=NULL, tg_code=NULL WHERE id=?').run(req.user.teacher_id); res.json({ ok: true }); });
-app.get('/api/telegram/status', requirePerm('settings'), (req, res) => res.json({ ...bot.status(), admin: setting('tg_admin', ''), bot: setting('tg_bot_username', 'hamraheteam_bot'), teachers: db.prepare('SELECT id,name,tg_chat_id IS NOT NULL linked FROM teachers').all() }));
+app.get('/api/telegram/status', requirePerm('settings'), (req, res) => res.json({ ...bot.status(), relay1: { url: setting('tg_relay1_url', ''), ip: setting('tg_relay1_ip', ''), insecure: setting('tg_relay1_insecure', '0'), enabled: setting('tg_relay1_enabled', '1'), has_secret: !!setting('tg_relay1_secret', '') }, relay2: { url: setting('tg_relay2_url', ''), ip: setting('tg_relay2_ip', ''), insecure: setting('tg_relay2_insecure', '0'), enabled: setting('tg_relay2_enabled', '1'), has_secret: !!setting('tg_relay2_secret', '') }, admin: setting('tg_admin', ''), bot: setting('tg_bot_username', 'hamraheteam_bot'), teachers: db.prepare('SELECT id,name,tg_chat_id IS NOT NULL linked FROM teachers').all() }));
 app.put('/api/telegram/settings', requireMain, (req, res) => {
-  for (const k of ['tg_token', 'tg_admin', 'tg_api_base', 'tg_bot_username']) if (k in req.body) db.prepare('INSERT INTO settings VALUES(?,?) ON CONFLICT(key) DO UPDATE SET value=excluded.value').run(k, String(req.body[k] || ''));
+  for (const k of ['tg_token', 'tg_admin', 'tg_api_base', 'tg_bot_username', 'tg_relay1_url', 'tg_relay1_secret', 'tg_relay1_ip', 'tg_relay1_insecure', 'tg_relay1_enabled', 'tg_relay2_url', 'tg_relay2_secret', 'tg_relay2_ip', 'tg_relay2_insecure', 'tg_relay2_enabled']) if (k in req.body) db.prepare('INSERT INTO settings VALUES(?,?) ON CONFLICT(key) DO UPDATE SET value=excluded.value').run(k, String(req.body[k] || ''));
   res.json({ ok: true });
 });
 app.post('/api/telegram/test', requirePerm('settings'), async (req, res) => {
-  try { const r = await fetch(`${setting('tg_api_base', 'https://api.telegram.org')}/bot${setting('tg_token', '')}/getMe`, { signal: AbortSignal.timeout(15000) }).then(r => r.json()); res.json(r); }
+  try { await bot.ping(); res.json({ ok: true, result: { username: setting('tg_bot_username', 'hamraheteam_bot') } }); }
   catch (e) { res.status(502).json({ error: 'سرور به تلگرام دسترسی ندارد: ' + e.message }); }
 });
 

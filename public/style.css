@@ -354,3 +354,14 @@ html,body{overflow-x:hidden}
 @media (max-width:900px){.board .tt{grid-template-columns:repeat(4,minmax(0,1fr))}}
 
 .board .tt .col{min-height:calc(100vh - 275px)}
+
+/* fullscreen board */
+#v-board:fullscreen,#v-week:fullscreen{background:var(--bg);padding:18px;overflow:auto}
+body.fs .board{grid-template-columns:minmax(0,1fr) 260px}
+#v-board:fullscreen .tt .col{min-height:calc(100vh - 200px)}
+#v-board:fullscreen .cls .t{font-size:14px}
+#v-board:fullscreen .cls .s{font-size:12px}
+#v-board:fullscreen .stats.mini{display:none}
+#v-week:fullscreen .tt{grid-template-columns:repeat(7,minmax(0,1fr))}
+#v-week:fullscreen .tt .col{min-height:calc(100vh - 120px)}
+#v-week:fullscreen .cls .t{font-size:15px}#v-week:fullscreen .cls .s{font-size:12.5px}

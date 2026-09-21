@@ -16,11 +16,69 @@ module.exports = function createBot({ db, setting, log = console }) {
 
   const token = () => setting('tg_token', '');
   const base = () => (setting('tg_api_base', 'https://api.telegram.org') || 'https://api.telegram.org').replace(/\/$/, '');
+  // ---- transport: relays (Iran -> outside -> Telegram) with automatic failover, or direct ----
+  const https = require('https'), net = require('net'), tls = require('tls');
+  const relays = () => {
+    const out = [];
+    for (const n of ['2', '1']) { // relay2 first (if set), relay1 as backup
+      const url = setting(`tg_relay${n}_url`, ''); if (!url || setting(`tg_relay${n}_enabled`, '1') === '0') continue;
+      out.push({ name: 'relay' + n, url, ip: setting(`tg_relay${n}_ip`, ''), secret: setting(`tg_relay${n}_secret`, ''), insecure: setting(`tg_relay${n}_insecure`, '0') === '1' });
+    }
+    return out;
+  };
+  const BAD = {}; const BAD_FOR = 90000;
+  function relayOnce(relay, payload, httpTimeout, connectTimeout) {
+    return new Promise((resolve, reject) => {
+      const u = new URL(relay.url), host = u.hostname, port = +u.port || (u.protocol === 'https:' ? 443 : 80);
+      const body = Buffer.from(JSON.stringify(payload));
+      let settled = false; const ok = v => { if (!settled) { settled = true; resolve(v); } }, fail = e => { if (!settled) { settled = true; reject(e); } };
+      const onSock = sock => {
+        sock.setTimeout(httpTimeout, () => { sock.destroy(); fail(new Error('read timeout')); });
+        const req = https.request({ createConnection: () => sock, host, port, path: u.pathname + u.search, method: 'POST', headers: { 'Content-Type': 'application/json', 'X-Relay-Secret': relay.secret, 'Host': host, 'Content-Length': body.length } }, res => {
+          let raw = ''; res.on('data', d => raw += d); res.on('end', () => { try { ok(JSON.parse(raw)); } catch { ok({ ok: false, error: `bad json (${res.statusCode}): ${raw.slice(0, 120)}` }); } });
+        });
+        req.on('error', fail); req.end(body);
+      };
+      if (u.protocol === 'https:') {
+        const sock = tls.connect({ host: relay.ip || host, port, servername: host, maxVersion: 'TLSv1.2', rejectUnauthorized: !relay.insecure, timeout: connectTimeout }, () => onSock(sock));
+        sock.once('timeout', () => { sock.destroy(); fail(new Error('connect timeout')); }); sock.once('error', fail);
+      } else {
+        const sock = net.connect({ host: relay.ip || host, port, timeout: connectTimeout }, () => onSock(sock));
+        sock.once('timeout', () => { sock.destroy(); fail(new Error('connect timeout')); }); sock.once('error', fail);
+      }
+    });
+  }
+  async function viaRelay(method, body) {
+    const payload = { token: token(), method, ...body };
+    if (payload.reply_markup && typeof payload.reply_markup !== 'string') payload.reply_markup = JSON.stringify(payload.reply_markup);
+    if (payload.reply_markup && payload.reply_markup.length > 2048) delete payload.reply_markup; // relay limit
+    if (method === 'getUpdates') payload.timeout = Math.min(25, payload.timeout || 25);
+    const now = Date.now();
+    const order = relays().sort((a, b) => ((BAD[a.name] || 0) > now) - ((BAD[b.name] || 0) > now));
+    let last = null;
+    for (const relay of order) {
+      for (let attempt = 0; attempt < 2; attempt++) {
+        try {
+          const res = await relayOnce(relay, payload, method === 'getUpdates' ? 40000 : 25000, 4000);
+          if (res && (res.ok || 'error_code' in res || 'tg_error' in res || 'http_code' in res)) { delete BAD[relay.name]; return res; }
+          last = res;
+        } catch (e) { last = e; break; }
+        await new Promise(r => setTimeout(r, 300));
+      }
+      BAD[relay.name] = Date.now() + BAD_FOR;
+      log.warn(`[RELAY] ${relay.name} failed (${String((last && (last.message || last.error)) || last).slice(0, 120)})`);
+    }
+    throw new Error((last && (last.message || last.error || last.description)) || 'no relay answered');
+  }
   async function call(method, body) {
     const t = token(); if (!t) throw new Error('no token');
-    const r = await fetch(`${base()}/bot${t}/${method}`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body || {}), signal: AbortSignal.timeout(40000) });
-    const j = await r.json().catch(() => ({}));
-    if (!j.ok) throw new Error(j.description || ('telegram ' + r.status));
+    let j;
+    if (relays().length) j = await viaRelay(method, body || {});
+    else {
+      const r = await fetch(`${base()}/bot${t}/${method}`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body || {}), signal: AbortSignal.timeout(40000) });
+      j = await r.json().catch(() => ({}));
+    }
+    if (!j.ok) throw new Error(j.description || j.error || ('telegram error ' + (j.error_code || '')));
     return j.result;
   }
   const send = (chat_id, text, extra = {}) => call('sendMessage', { chat_id, text, parse_mode: 'HTML', ...extra }).catch(e => log.warn('tg send:', e.message));
@@ -234,6 +292,6 @@ module.exports = function createBot({ db, setting, log = console }) {
       }
     }
   }
-  const status = () => ({ token: !!token(), base: base(), polling: running, lastError, admin_linked: !!setting('tg_admin_chat', ''), linked_teachers: db.prepare('SELECT COUNT(*) c FROM teachers WHERE tg_chat_id IS NOT NULL').get().c });
-  return { poll, handleUpdate, notifyReport, status, send };
+  const status = () => ({ token: !!token(), base: base(), relays: relays().map(r => ({ name: r.name, url: r.url, dead: (BAD[r.name] || 0) > Date.now() })), polling: running, lastError, admin_linked: !!setting('tg_admin_chat', ''), linked_teachers: db.prepare('SELECT COUNT(*) c FROM teachers WHERE tg_chat_id IS NOT NULL').get().c });
+  return { poll, handleUpdate, notifyReport, status, send, ping: () => call('getUpdates', { timeout: 0, limit: 1, offset: -1 }) };
 };
