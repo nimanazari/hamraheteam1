@@ -365,3 +365,5 @@ body.fs .board{grid-template-columns:minmax(0,1fr) 260px}
 #v-week:fullscreen .tt{grid-template-columns:repeat(7,minmax(0,1fr))}
 #v-week:fullscreen .tt .col{min-height:calc(100vh - 120px)}
 #v-week:fullscreen .cls .t{font-size:15px}#v-week:fullscreen .cls .s{font-size:12.5px}
+
+@media print{.side,.topbar .row,.overlay,.drawer,.toast{display:none!important}.main{padding:0}.card{box-shadow:none;border:1px solid #ddd;break-inside:avoid}}

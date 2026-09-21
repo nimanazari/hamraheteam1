@@ -12,6 +12,7 @@
     <div class="nav active" data-v="board">🧩 تخته هفتگی</div>
     <div class="nav" data-v="calendar">🗓 تقویم ترم</div>
     <div class="nav" data-v="months">📆 تقویم کلی و تعطیلات</div>
+    <div class="nav" data-v="stats">📊 آمار و خروجی</div>
     <div class="nav" data-v="teachers">👩‍🏫 دبیران</div>
     <div class="nav" data-v="students">🎒 دانش‌آموزان</div>
     <div class="nav" data-v="schools">🏫 مدارس</div>
@@ -84,6 +85,12 @@
       </div>
       <p class="muted" style="font-size:12px;margin-top:-10px">روی هر روز کلیک کنید تا انتخاب شود (چند روز با هم). روز تعطیل یعنی همه کلاس‌های آن روز برگزار نمی‌شود و در پرونده دبیر و تقویم ترم خط می‌خورد. مناسبت‌های قمری تقریبی هستند؛ اگر یک روز اختلاف داشت همین‌جا اصلاح کنید. <span id="mo-count"></span></p>
       <div class="months" id="months"></div>
+    </section>
+
+    <!-- ========== STATS ========== -->
+    <section class="view" id="v-stats">
+      <div class="topbar"><h2>آمار و خروجی</h2><div class="row"><button class="btn ghost sm" onclick="exportCSV('teachers')">⬇️ اکسل دبیران</button><button class="btn ghost sm" onclick="exportCSV('students')">⬇️ اکسل دانش‌آموزان</button><button class="btn ghost sm" onclick="exportCSV('classes')">⬇️ اکسل کلاس‌ها</button><button class="btn sm" onclick="window.print()">🖨 چاپ</button></div></div>
+      <div id="stats-body"></div>
     </section>
 
     <!-- ========== TEACHERS ========== -->
@@ -179,7 +186,7 @@ const cardWarn = c => c.type === 'public' ? (!c.school_id ? 'مدرسه را ا�
 let picked = null; // {type, id} for tap-to-place on touch devices
 const TOUCH = matchMedia('(pointer: coarse)').matches;
 
-const nav = v => { $$('.nav[data-v]').forEach(n => n.classList.toggle('active', n.dataset.v === v)); $$('.view').forEach(s => s.classList.toggle('active', s.id === 'v-' + v)); if (v === 'plans') loadPlans(); if (v === 'payroll') loadPayroll(); if (v === 'settings') loadTg(); if (v === 'reports') { loadReports(); localStorage.setItem('seenRep', window._maxRep || 0); $('#rep-badge').style.display = 'none'; } if (v === 'calendar') renderCal(); if (v === 'months') renderMonths(); };
+const nav = v => { $$('.nav[data-v]').forEach(n => n.classList.toggle('active', n.dataset.v === v)); $$('.view').forEach(s => s.classList.toggle('active', s.id === 'v-' + v)); if (v === 'plans') loadPlans(); if (v === 'payroll') loadPayroll(); if (v === 'settings') loadTg(); if (v === 'reports') { loadReports(); localStorage.setItem('seenRep', window._maxRep || 0); $('#rep-badge').style.display = 'none'; } if (v === 'calendar') renderCal(); if (v === 'months') renderMonths(); if (v === 'stats') renderStats(); };
 $$('.nav[data-v]').forEach(n => n.onclick = () => nav(n.dataset.v));
 
 async function loadAll() {
@@ -581,6 +588,41 @@ async function copyClass(id, day) {
 async function delClass(id) {
   if (!confirm('این کلاس حذف شود؟')) return;
   await api('/api/classes/' + id, 'DELETE'); closeModal(); toast('حذف شد'); reloadClasses();
+}
+
+/* ================= STATS / EXPORT ================= */
+function renderStats() {
+  const active = students.filter(s => s.active), inactive = students.filter(s => !s.active);
+  const stuClasses = s => classes.filter(c => c.student_ids.includes(s.id));
+  const tClasses = t => classes.filter(c => c.teacher_id === t.id);
+  const withCls = active.filter(s => stuClasses(s).length), noCls = active.filter(s => !stuClasses(s).length);
+  const tWith = teachers.filter(t => tClasses(t).length), tNo = teachers.filter(t => !tClasses(t).length);
+  const byType = Object.keys(TYPES).map(k => [TYPES[k], classes.filter(c => c.type === k).length]);
+  const byDay = meta.days.map((d, i) => [d, classes.filter(c => c.day === i).length]);
+  const bySchool = schools.map(sc => [sc.name, classes.filter(c => c.school_id === sc.id).length, students.filter(x => x.school_id === sc.id).length]);
+  const tile = (i, n, l) => `<div class="stat"><i>${i}</i><div><b>${fa(n)}</b><span>${l}</span></div></div>`;
+  $('#stats-body').innerHTML = `
+    <div class="stats" style="grid-template-columns:repeat(6,1fr)">${tile('👩‍🏫', teachers.length, 'دبیر')}${tile('✅', tWith.length, 'دبیر با کلاس')}${tile('🎒', active.length, 'دانش‌آموز فعال')}${tile('📚', withCls.length, 'دانش‌آموز با کلاس')}${tile('⚠️', noCls.length, 'دانش‌آموز بدون کلاس')}${tile('🗓', classes.length, 'کلاس در هفته')}</div>
+    <div class="grid3">
+      <div class="card"><h3>کلاس‌ها بر اساس نوع</h3><table>${byType.map(([k, n]) => `<tr><td>${k}</td><td><b>${fa(n)}</b></td></tr>`).join('')}</table></div>
+      <div class="card"><h3>کلاس‌ها بر اساس روز</h3><table>${byDay.map(([k, n]) => `<tr><td>${k}</td><td><b>${fa(n)}</b></td></tr>`).join('')}</table></div>
+      <div class="card"><h3>محل‌ها</h3><table><tr><th>محل</th><th>کلاس</th><th>دانش‌آموز</th></tr>${bySchool.map(([k, n, m]) => `<tr><td>${esc(k)}</td><td>${fa(n)}</td><td>${fa(m)}</td></tr>`).join('')}</table></div>
+    </div>
+    <div class="grid2" style="margin-top:14px">
+      <div class="card"><h3>دبیران (${fa(teachers.length)})</h3><table><tr><th>دبیر</th><th>کلاس</th><th>روزها</th><th>دانش‌آموز</th></tr>${teachers.map(t => { const cs = tClasses(t); return `<tr style="${cs.length ? '' : 'background:#fff7ed'}"><td><span class="dot" style="background:${t.color}"></span>${esc(t.name)}${t.subject ? ' <span class="muted">· ' + esc(t.subject) + '</span>' : ''}</td><td>${fa(cs.length)}</td><td>${[...new Set(cs.map(c => meta.days[c.day]))].join('، ') || '<span class="muted">بدون کلاس</span>'}</td><td>${fa(new Set(cs.flatMap(c => c.student_ids)).size)}</td></tr>`; }).join('')}</table>
+        ${tNo.length ? `<p class="muted" style="font-size:12px;margin-top:8px">⚠️ بدون کلاس: ${tNo.map(t => esc(t.name)).join('، ')}</p>` : ''}</div>
+      <div class="card"><h3>دانش‌آموزان بدون کلاس (${fa(noCls.length)})</h3><div class="row" style="gap:6px">${noCls.map(s => `<span class="chip">${esc(s.name)}</span>`).join('') || '<span class="muted">همه دانش‌آموزهای فعال کلاس دارند 🎉</span>'}</div>
+        ${inactive.length ? `<h3 style="margin-top:14px">غیرفعال (${fa(inactive.length)})</h3><div class="row" style="gap:6px">${inactive.map(s => `<span class="chip" style="opacity:.6">${esc(s.name)}${s.note ? ' · ' + esc(s.note) : ''}</span>`).join('')}</div>` : ''}</div>
+    </div>
+    <div class="card" style="margin-top:14px"><h3>دانش‌آموزان با کلاس (${fa(withCls.length)})</h3><table><tr><th>دانش‌آموز</th><th>محل</th><th>کلاس‌ها</th></tr>${withCls.map(s => `<tr><td>${esc(s.name)}</td><td>${esc(schoolName(s.school_id))}</td><td>${stuClasses(s).map(c => `<span class="chip" style="border-color:${c.teacher_color}">${meta.days[c.day]} ${fa(c.start)} · ${esc(c.teacher_name || '')}${c.title ? ' · ' + esc(c.title) : ''}</span>`).join(' ')}</td></tr>`).join('')}</table></div>`;
+}
+function exportCSV(kind) {
+  let rows;
+  if (kind === 'teachers') rows = [['نام', 'درس', 'تعداد کلاس', 'روزها', 'تعداد دانش‌آموز'], ...teachers.map(t => { const cs = classes.filter(c => c.teacher_id === t.id); return [t.name, t.subject || '', cs.length, [...new Set(cs.map(c => meta.days[c.day]))].join(' / '), new Set(cs.flatMap(c => c.student_ids)).size]; })];
+  else if (kind === 'students') rows = [['نام', 'محل', 'وضعیت', 'تعداد کلاس', 'کلاس‌ها'], ...students.map(s => { const cs = classes.filter(c => c.student_ids.includes(s.id)); return [s.name, schoolName(s.school_id), s.active ? 'فعال' : 'غیرفعال' + (s.note ? ' (' + s.note + ')' : ''), cs.length, cs.map(c => `${meta.days[c.day]} ${c.start} ${c.teacher_name || ''}`).join(' / ')]; })];
+  else rows = [['روز', 'از', 'تا', 'دبیر', 'نوع', 'محل', 'نام کلاس', 'تعداد دانش‌آموز', 'دانش‌آموزان'], ...classes.map(c => [meta.days[c.day], c.start, c.end, c.teacher_name || '', TYPES[c.type] || '', c.school_name || '', c.title || '', c.students.length, c.students.map(s => s.name).join(' / ')])];
+  const csv = '\ufeff' + rows.map(r => r.map(v => '"' + String(v ?? '').replace(/"/g, '""') + '"').join(',')).join('\r\n');
+  const a = document.createElement('a'); a.href = URL.createObjectURL(new Blob([csv], { type: 'text/csv;charset=utf-8' })); a.download = `${kind}-${jStr(todayISO()).replace(/\//g, '-')}.csv`; a.click();
 }
 
 /* ================= MONTHS / HOLIDAYS ================= */
