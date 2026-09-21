@@ -149,6 +149,7 @@ async function loadAll() {
   const sOpts = schools.map(s => `<option value="${s.id}">${esc(s.name)}</option>`).join('');
   ['#f-teacher', '#rep-teacher', '#c-teacher'].forEach(s => { const v = $(s).value; $(s).innerHTML = '<option value="">همه دبیران</option>' + tOpts; $(s).value = v; });
   ['#f-school', '#pool-school'].forEach(s => { const v = $(s).value; $(s).innerHTML = '<option value="">همه مدارس</option>' + sOpts; $(s).value = v; });
+  if (ME && !ME.main) { $$('#v-settings .card').forEach(c => { if (/رمز مدیر|تلگرام/.test(c.querySelector('h3')?.textContent || '')) c.style.display = 'none'; }); }
   $('#set-slots').value = meta.slots.join('\n'); $('#set-term').value = meta.term_start; $('#set-cstart').value = meta.classes_start; $('#set-end').value = meta.term_end; updateBadge();
   renderBoard(); renderPool(); renderTeachers(); renderStudents(); renderSchools(); refreshUndo();
   if ($('#v-calendar').classList.contains('active')) renderCal();
@@ -547,7 +548,7 @@ async function saveOverride(cid, iso) {
 const COLORS = ['#5b5bd6', '#0ea5e9', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6', '#ec4899', '#14b8a6', '#f97316', '#64748b'];
 function renderTeachers() {
   $('#t-table').innerHTML = `<tr><th>رنگ</th><th>نام</th><th>درس</th><th>نام کاربری</th><th>رمز</th><th>تعداد کلاس</th><th></th></tr>` + teachers.map(t => `<tr>
-    <td><span class="dot" style="background:${t.color}"></span></td><td><b>${esc(t.name)}</b></td><td>${esc(t.subject)}</td><td dir="ltr">${esc(t.username)}</td><td dir="ltr">${esc(t.password)}${t.is_admin ? ' <span class="chip" style="font-size:10px">مدیر</span>' : ''}</td>
+    <td><span class="dot" style="background:${t.color}"></span></td><td><b>${esc(t.name)}</b></td><td>${esc(t.subject)}</td><td dir="ltr">${esc(t.username)}</td><td dir="ltr">${esc(t.password)}${t.is_admin ? ` <span class="chip" style="font-size:10px" title="${(t.perms || []).map(p => PERM_NAMES[p]).join('، ')}">مدیر</span>` : ''}</td>
     <td>${fa(classes.filter(c => c.teacher_id === t.id).length)}</td>
     <td><button class="btn ghost sm" onclick="editTeacher(${t.id})">ویرایش</button> <button class="btn ghost sm" onclick="del('teachers',${t.id})">حذف</button></td></tr>`).join('') || '<tr><td colspan="7" class="muted">هنوز دبیری ثبت نشده. روی «دبیر جدید» بزنید.</td></tr>';
 }
@@ -557,12 +558,15 @@ function editTeacher(id) {
     <div class="field"><label>نام</label><input id="m-name" value="${esc(t.name)}" autofocus></div>
     <div class="field"><label>درس</label><input id="m-subject" value="${esc(t.subject)}"></div>
     <div class="grid2"><div class="field"><label>نام کاربری (انگلیسی)</label><input id="m-user" dir="ltr" value="${esc(t.username)}"></div><div class="field"><label>رمز</label><input id="m-pass" dir="ltr" value="${esc(t.password)}"></div></div>
-    <div class="field"><label><input type="checkbox" id="m-admin" ${t.is_admin ? 'checked' : ''} style="width:auto;vertical-align:middle"> دسترسی مدیر (می‌تواند همه چیز را ببیند و ویرایش کند)</label></div>
+    ${ME.main ? `<div class="box"><label><input type="checkbox" id="m-admin" ${t.is_admin ? 'checked' : ''} style="width:auto;vertical-align:middle" onchange="$('#m-perms').style.display=this.checked?'':'none'"> <b>دسترسی مدیر</b></label>
+      <div id="m-perms" style="${t.is_admin ? '' : 'display:none'};margin-top:8px"><label>بخش‌هایی که این مدیر می‌بیند:</label><div class="row" style="gap:8px">${Object.entries(PERM_NAMES).map(([k, v]) => `<label class="chip" style="cursor:pointer"><input type="checkbox" class="m-perm" value="${k}" ${(t.perms || []).includes(k) || (!id && k !== 'payroll') ? 'checked' : ''} style="width:auto;margin:0 0 0 4px"> ${v}</label>`).join('')}</div>
+      <p class="muted" style="font-size:11px;margin:6px 0 0">«حقوق» را فقط به کسی بدهید که باید نرخ‌ها و مبالغ همه را ببیند.</p></div>` : ''}
     <div class="field"><label>رنگ در برنامه</label><div class="row">${COLORS.map(c => `<span class="colorbox ${c === t.color ? 'sel' : ''}" style="background:${c}" onclick="$('#m-color').value='${c}';$$('.colorbox').forEach(b=>b.classList.remove('sel'));this.classList.add('sel')"></span>`).join('')}<input type="hidden" id="m-color" value="${t.color}"></div></div>
     <div class="row" style="justify-content:flex-end"><button class="btn ghost" onclick="closeModal()">انصراف</button><button class="btn" onclick="saveTeacher(${id || 0})">ذخیره</button></div>`);
 }
 async function saveTeacher(id) {
-  const body = { name: $('#m-name').value.trim(), subject: $('#m-subject').value.trim(), username: $('#m-user').value.trim() || null, password: $('#m-pass').value, color: $('#m-color').value, is_admin: $('#m-admin').checked ? 1 : 0 };
+  const body = { name: $('#m-name').value.trim(), subject: $('#m-subject').value.trim(), username: $('#m-user').value.trim() || null, password: $('#m-pass').value, color: $('#m-color').value };
+  if (ME.main) { body.is_admin = $('#m-admin').checked ? 1 : 0; body.perms = $$('.m-perm:checked').map(x => x.value); }
   if (!body.name) return toast('نام لازم است', 'bad');
   try { if (id) await api('/api/teachers/' + id, 'PUT', body); else await api('/api/teachers', 'POST', body); closeModal(); toast('ذخیره شد', 'ok'); loadAll(); }
   catch (e) { toast(e.message.includes('UNIQUE') ? 'این نام کاربری قبلاً استفاده شده' : e.message, 'bad'); }
@@ -723,7 +727,17 @@ async function saveTg() { const b = { tg_bot_username: $('#tg-bot').value.trim()
 async function testTg() { try { const r = await api('/api/telegram/test', 'POST'); toast(r.ok ? `✅ متصل: @${r.result.username}` : '❌ ' + (r.description || 'خطا'), r.ok ? 'ok' : 'bad'); } catch (e) { toast(e.message, 'bad'); } }
 async function savePass() { const p = $('#set-pass').value; if (!p) return; await api('/api/meta/admin-password', 'PUT', { password: p }); $('#set-pass').value = ''; toast('رمز تغییر کرد', 'ok'); }
 
-api('/api/me').then(u => { if (!u) location.href = '/'; else if (u.role !== 'admin') location.href = '/teacher.html'; else { $('#uname').textContent = u.name; if (u.teacher_id) $('#teacher-link').style.display = ''; loadAll(); } });
+let ME = null;
+const PERM_NAMES = { board: 'تخته هفتگی', calendar: 'تقویم ترم', teachers: 'دبیران', students: 'دانش‌آموزان', schools: 'مدارس', reports: 'گزارش دبیران', plans: 'طرح درس‌ها', payroll: 'حقوق', settings: 'تنظیمات' };
+const can = p => !!ME && (ME.main || (ME.perms || []).includes(p));
+api('/api/me').then(u => {
+  if (!u) return location.href = '/'; if (u.role !== 'admin') return location.href = '/teacher.html';
+  ME = u; $('#uname').textContent = u.name + (u.main ? ' (مدیر اصلی)' : ''); if (u.teacher_id) $('#teacher-link').style.display = '';
+  $$('.nav[data-v]').forEach(n => { if (!can(n.dataset.v)) n.remove(); });
+  const first = $('.nav[data-v]'); if (first && !can('board')) { $('#v-board').classList.remove('active'); nav(first.dataset.v); }
+  if (!can('board')) { $('#pool-q') && ($('.board').style.display = 'none'); }
+  loadAll();
+});
 </script>
 </body>
 </html>

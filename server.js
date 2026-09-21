@@ -41,6 +41,10 @@ addCol('reports', 'check_out', "TEXT DEFAULT ''");
 addCol('reports', 'plan_id', 'INTEGER');
 addCol('teachers', 'tg_chat_id', 'TEXT');
 addCol('teachers', 'tg_code', 'TEXT');
+addCol('teachers', 'perms', 'TEXT');
+const PERMS = ['board', 'calendar', 'teachers', 'students', 'schools', 'reports', 'plans', 'payroll', 'settings'];
+const DEFAULT_PERMS = PERMS.filter(p => p !== 'payroll');
+const permsOf = t => { try { const p = JSON.parse(t.perms || 'null'); return Array.isArray(p) ? p : DEFAULT_PERMS; } catch { return DEFAULT_PERMS; } };
 
 // ---- seed ----
 if (db.prepare('SELECT COUNT(*) c FROM schools').get().c === 0) {
@@ -82,21 +86,25 @@ app.use((req, res, next) => {
   const m = /sid=([a-f0-9]+)/.exec(req.headers.cookie || '');
   req.user = m ? sessions.get(m[1]) : null;
   // refresh admin flag from DB (so revoking admin works immediately)
-  if (req.user && req.user.teacher_id) { const t = db.prepare('SELECT is_admin, name FROM teachers WHERE id=?').get(req.user.teacher_id); if (!t) req.user = null; else { req.user.name = t.name; req.user.role = t.is_admin ? 'admin' : 'teacher'; req.user.id = req.user.teacher_id; } }
+  if (req.user && req.user.teacher_id) { const t = db.prepare('SELECT is_admin, name, perms FROM teachers WHERE id=?').get(req.user.teacher_id); if (!t) req.user = null; else { req.user.name = t.name; req.user.role = t.is_admin ? 'admin' : 'teacher'; req.user.id = req.user.teacher_id; req.user.perms = t.is_admin ? permsOf(t) : []; req.user.main = false; } }
+  else if (req.user && req.user.role === 'admin') { req.user.main = true; req.user.perms = PERMS; }
   next();
 });
 const cookieFor = (req, sid) => `sid=${sid}; Path=/; HttpOnly; SameSite=Lax; Max-Age=7776000${req.secure ? '; Secure' : ''}`;
 const requireAuth = (req, res, next) => req.user ? next() : res.status(401).json({ error: 'unauthorized' });
 const requireAdmin = (req, res, next) => (req.user && req.user.role === 'admin') ? next() : res.status(403).json({ error: 'forbidden' });
 const isAdmin = req => req.user && req.user.role === 'admin';
+const hasPerm = (req, p) => isAdmin(req) && (req.user.main || (req.user.perms || []).includes(p));
+const requirePerm = p => (req, res, next) => hasPerm(req, p) ? next() : res.status(403).json({ error: 'دسترسی به این بخش ندارید' });
+const requireMain = (req, res, next) => (req.user && req.user.main) ? next() : res.status(403).json({ error: 'فقط مدیر اصلی' });
 
 app.post('/api/login', (req, res) => {
   const { username, password } = req.body || {};
   let user = null;
-  if (username === 'admin' && password === setting('admin_password', 'admin')) user = { role: 'admin', name: 'مدیر' };
+  if (username === 'admin' && password === setting('admin_password', 'admin')) user = { role: 'admin', name: 'مدیر', main: true, perms: PERMS };
   else {
     const t = db.prepare('SELECT * FROM teachers WHERE username=? AND password=?').get(username, password);
-    if (t) user = { role: t.is_admin ? 'admin' : 'teacher', id: t.id, teacher_id: t.id, name: t.name };
+    if (t) user = { role: t.is_admin ? 'admin' : 'teacher', id: t.id, teacher_id: t.id, name: t.name, main: false, perms: t.is_admin ? permsOf(t) : [] };
   }
   if (!user) return res.status(401).json({ error: 'نام کاربری یا رمز اشتباه است' });
   const sid = crypto.randomBytes(16).toString('hex');
@@ -164,31 +172,31 @@ function restoreData(json) {
     db.exec('COMMIT');
   } catch (e) { db.exec('ROLLBACK'); throw e; }
 }
-app.get('/api/snapshots', requireAdmin, (req, res) => {
+app.get('/api/snapshots', requirePerm('board'), (req, res) => {
   const rows = db.prepare("SELECT id,kind,label,by,created_at,length(data) size FROM snapshots WHERE kind<>'redo' ORDER BY id DESC LIMIT 80").all();
   rows.forEach(r => { try { r.classes = JSON.parse(db.prepare('SELECT data FROM snapshots WHERE id=?').get(r.id).data).classes.length; } catch { r.classes = 0; } });
   res.json({ list: rows, canUndo: !!db.prepare("SELECT 1 FROM snapshots WHERE kind='auto' LIMIT 1").get(), canRedo: !!db.prepare("SELECT 1 FROM snapshots WHERE kind='redo' LIMIT 1").get() });
 });
-app.post('/api/snapshots', requireAdmin, (req, res) => { snapshot(req, 'manual', req.body.label || 'ذخیره دستی'); res.json({ ok: true }); });
-app.post('/api/snapshots/:id/restore', requireAdmin, (req, res) => {
+app.post('/api/snapshots', requirePerm('board'), (req, res) => { snapshot(req, 'manual', req.body.label || 'ذخیره دستی'); res.json({ ok: true }); });
+app.post('/api/snapshots/:id/restore', requirePerm('board'), (req, res) => {
   const sn = db.prepare('SELECT * FROM snapshots WHERE id=?').get(req.params.id); if (!sn) return res.status(404).json({ error: 'نسخه پیدا نشد' });
   snapshot(req, 'restore', 'قبل از بازگردانی به نسخه ' + sn.id);
   restoreData(sn.data); res.json({ ok: true });
 });
-app.post('/api/undo', requireAdmin, (req, res) => {
+app.post('/api/undo', requirePerm('board'), (req, res) => {
   const sn = db.prepare("SELECT * FROM snapshots WHERE kind='auto' ORDER BY id DESC LIMIT 1").get(); if (!sn) return res.status(400).json({ error: 'چیزی برای برگرداندن نیست' });
   db.prepare('INSERT INTO snapshots(kind,label,by,data) VALUES (?,?,?,?)').run('redo', sn.label, req.user.name || '', boardData());
   db.prepare('DELETE FROM snapshots WHERE id=?').run(sn.id);
   restoreData(sn.data); res.json({ ok: true, label: sn.label });
 });
-app.post('/api/redo', requireAdmin, (req, res) => {
+app.post('/api/redo', requirePerm('board'), (req, res) => {
   const sn = db.prepare("SELECT * FROM snapshots WHERE kind='redo' ORDER BY id DESC LIMIT 1").get(); if (!sn) return res.status(400).json({ error: 'چیزی برای تکرار نیست' });
   db.prepare('INSERT INTO snapshots(kind,label,by,data) VALUES (?,?,?,?)').run('auto', sn.label, req.user.name || '', boardData());
   db.prepare('DELETE FROM snapshots WHERE id=?').run(sn.id);
   restoreData(sn.data); res.json({ ok: true, label: sn.label });
 });
 // bulk day operations
-app.post('/api/classes/bulk', requireAdmin, (req, res) => {
+app.post('/api/classes/bulk', requirePerm('board'), (req, res) => {
   const { action, from_day, to_day, ids } = req.body;
   const list = ids?.length ? allClasses(`WHERE c.id IN (${ids.map(Number).join(',')})`) : allClasses('WHERE c.day=?', [Number(from_day)]);
   if (!list.length) return res.status(400).json({ error: 'کلاسی برای این عملیات نیست' });
@@ -204,16 +212,16 @@ app.post('/api/classes/bulk', requireAdmin, (req, res) => {
 app.get('/api/meta', requireAuth, (req, res) => {
   res.json({ days: DAYS, slots: JSON.parse(setting('slots', '[]')), term_start: setting('term_start', '2026-09-23'), classes_start: setting('classes_start', '2026-09-25'), term_end: setting('term_end', '2027-05-21'), term_weeks: +setting('term_weeks', '18') });
 });
-app.put('/api/meta/slots', requireAdmin, (req, res) => { db.prepare("UPDATE settings SET value=? WHERE key='slots'").run(JSON.stringify(req.body.slots || [])); res.json({ ok: true }); });
-app.put('/api/meta/term', requireAdmin, (req, res) => {
+app.put('/api/meta/slots', requirePerm('settings'), (req, res) => { db.prepare("UPDATE settings SET value=? WHERE key='slots'").run(JSON.stringify(req.body.slots || [])); res.json({ ok: true }); });
+app.put('/api/meta/term', requirePerm('settings'), (req, res) => {
   for (const k of ['term_start', 'classes_start', 'term_weeks', 'term_end']) if (req.body[k]) db.prepare('UPDATE settings SET value=? WHERE key=?').run(String(req.body[k]), k);
   res.json({ ok: true });
 });
-app.put('/api/meta/admin-password', requireAdmin, (req, res) => { db.prepare("UPDATE settings SET value=? WHERE key='admin_password'").run(String(req.body.password || 'admin')); res.json({ ok: true }); });
+app.put('/api/meta/admin-password', requireMain, (req, res) => { db.prepare("UPDATE settings SET value=? WHERE key='admin_password'").run(String(req.body.password || 'admin')); res.json({ ok: true }); });
 
 // ---- overrides ----
 app.get('/api/overrides', requireAuth, (req, res) => res.json(db.prepare('SELECT * FROM overrides').all()));
-app.put('/api/overrides', requireAdmin, (req, res) => {
+app.put('/api/overrides', requirePerm('board'), (req, res) => {
   const { class_id, date, status = 'cancel', note = '' } = req.body;
   snapshot(req, 'auto', 'تغییر جلسه ' + date);
   if (status === 'none') db.prepare('DELETE FROM overrides WHERE class_id=? AND date=?').run(class_id, date);
@@ -227,26 +235,29 @@ function crud(table, cols, opts = {}) {
     const rows = db.prepare(`SELECT * FROM ${table} ORDER BY name`).all();
     if (table === 'teachers') {
       const ts = db.prepare('SELECT teacher_id, student_id FROM teacher_students').all();
-      rows.forEach(r => { r.student_ids = ts.filter(x => x.teacher_id === r.id).map(x => x.student_id); if (!isAdmin(req)) { delete r.password; delete r.username; delete r.rate_hour; delete r.rate_session; delete r.rate_fixed; } });
+      rows.forEach(r => { r.student_ids = ts.filter(x => x.teacher_id === r.id).map(x => x.student_id); r.perms = r.is_admin ? permsOf(r) : []; if (!isAdmin(req)) { delete r.password; delete r.username; } if (!hasPerm(req, 'payroll')) { delete r.rate_hour; delete r.rate_session; delete r.rate_fixed; } });
     }
     res.json(rows);
   });
-  app.post(`/api/${table}`, requireAdmin, (req, res) => {
+  const perm = requirePerm(table);
+  app.post(`/api/${table}`, perm, (req, res) => {
     const vals = cols.map(c => req.body[c] ?? null);
     try { const r = db.prepare(`INSERT INTO ${table}(${cols.join(',')}) VALUES (${cols.map(() => '?').join(',')})`).run(...vals); res.json({ id: Number(r.lastInsertRowid) }); }
     catch (e) { res.status(400).json({ error: e.message }); }
   });
-  app.put(`/api/${table}/:id`, requireAdmin, (req, res) => {
-    const set = cols.filter(c => c in req.body);
+  app.put(`/api/${table}/:id`, perm, (req, res) => {
+    let set = cols.filter(c => c in req.body);
+    if (table === 'teachers' && !req.user.main) set = set.filter(c => !['is_admin', 'perms', 'rate_hour', 'rate_session', 'rate_fixed'].includes(c)); // only main admin grants access / sets rates
+    if (table === 'teachers' && 'perms' in req.body && typeof req.body.perms !== 'string') req.body.perms = JSON.stringify(req.body.perms || []);
     try { if (set.length) db.prepare(`UPDATE ${table} SET ${set.map(c => `${c}=?`).join(',')} WHERE id=?`).run(...set.map(c => req.body[c]), req.params.id); res.json({ ok: true }); }
     catch (e) { res.status(400).json({ error: e.message }); }
   });
-  app.delete(`/api/${table}/:id`, requireAdmin, (req, res) => { db.prepare(`DELETE FROM ${table} WHERE id=?`).run(req.params.id); if (opts.onDelete) opts.onDelete(req.params.id); res.json({ ok: true }); });
+  app.delete(`/api/${table}/:id`, perm, (req, res) => { db.prepare(`DELETE FROM ${table} WHERE id=?`).run(req.params.id); if (opts.onDelete) opts.onDelete(req.params.id); res.json({ ok: true }); });
 }
 crud('schools', ['name'], { onDelete: id => { db.prepare('UPDATE students SET school_id=NULL WHERE school_id=?').run(id); db.prepare('UPDATE classes SET school_id=NULL WHERE school_id=?').run(id); } });
-crud('teachers', ['name', 'subject', 'username', 'password', 'color', 'is_admin', 'rate_hour', 'rate_session', 'rate_fixed'], { onDelete: id => { db.prepare('UPDATE classes SET teacher_id=NULL WHERE teacher_id=?').run(id); db.prepare('DELETE FROM teacher_students WHERE teacher_id=?').run(id); } });
+crud('teachers', ['name', 'subject', 'username', 'password', 'color', 'is_admin', 'rate_hour', 'rate_session', 'rate_fixed', 'perms'], { onDelete: id => { db.prepare('UPDATE classes SET teacher_id=NULL WHERE teacher_id=?').run(id); db.prepare('DELETE FROM teacher_students WHERE teacher_id=?').run(id); } });
 crud('students', ['name', 'school_id', 'note', 'active'], { onDelete: id => { db.prepare('DELETE FROM class_students WHERE student_id=?').run(id); db.prepare('DELETE FROM teacher_students WHERE student_id=?').run(id); } });
-app.put('/api/teachers/:id/students', requireAdmin, (req, res) => {
+app.put('/api/teachers/:id/students', requirePerm('board'), (req, res) => {
   db.prepare('DELETE FROM teacher_students WHERE teacher_id=?').run(req.params.id);
   const ins = db.prepare('INSERT OR IGNORE INTO teacher_students VALUES (?,?)');
   (req.body.student_ids || []).forEach(sid => ins.run(req.params.id, sid));
@@ -258,7 +269,7 @@ app.get('/api/classes', requireAuth, (req, res) => {
   if (!isAdmin(req)) return res.json(allClasses('WHERE c.teacher_id=?', [req.user.id]));
   res.json(allClasses());
 });
-app.post('/api/classes/check', requireAdmin, (req, res) => res.json(findConflicts(req.body)));
+app.post('/api/classes/check', requirePerm('board'), (req, res) => res.json(findConflicts(req.body)));
 function saveClass(body, id) {
   const { title = '', teacher_id = null, school_id = null, day, start, end, note = '', type = 'robotic' } = body;
   const student_ids = type === 'public' ? [] : (body.student_ids || []);
@@ -269,19 +280,19 @@ function saveClass(body, id) {
   student_ids.forEach(s => ins.run(id, s));
   return id;
 }
-app.post('/api/classes', requireAdmin, (req, res) => {
+app.post('/api/classes', requirePerm('board'), (req, res) => {
   const conflicts = findConflicts(req.body);
   if (conflicts.length && !req.body.force) return res.status(409).json({ conflicts });
   snapshot(req, 'auto', 'افزودن کلاس ' + DAYS[req.body.day]);
   res.json({ id: saveClass(req.body) });
 });
-app.put('/api/classes/:id', requireAdmin, (req, res) => {
+app.put('/api/classes/:id', requirePerm('board'), (req, res) => {
   const conflicts = findConflicts({ ...req.body, id: Number(req.params.id) });
   if (conflicts.length && !req.body.force) return res.status(409).json({ conflicts });
   snapshot(req, 'auto', 'ویرایش کلاس ' + (req.body.title || DAYS[req.body.day] || ''));
   res.json({ id: saveClass(req.body, Number(req.params.id)) });
 });
-app.delete('/api/classes/:id', requireAdmin, (req, res) => {
+app.delete('/api/classes/:id', requirePerm('board'), (req, res) => {
   snapshot(req, 'auto', 'حذف کلاس');
   for (const t of ['overrides', 'class_students', 'classes']) db.prepare(`DELETE FROM ${t} WHERE ${t === 'classes' ? 'id' : 'class_id'}=?`).run(req.params.id);
   res.json({ ok: true });
@@ -292,7 +303,7 @@ const REPORT_COLS = ['class_id', 'date', 'lesson_plan', 'done', 'with_whom', 'no
 const hoursOf = r => (r.check_in && r.check_out && r.check_out > r.check_in) ? +((toMin(r.check_out) - toMin(r.check_in)) / 60).toFixed(2) : 0;
 app.get('/api/reports', requireAuth, (req, res) => {
   const w = [], p = [];
-  if (!isAdmin(req)) { w.push('r.teacher_id=?'); p.push(req.user.id); }
+  if (!hasPerm(req, 'reports')) { w.push('r.teacher_id=?'); p.push(req.user.id || 0); }
   else if (req.query.teacher_id) { w.push('r.teacher_id=?'); p.push(req.query.teacher_id); }
   if (req.query.from) { w.push('r.date>=?'); p.push(req.query.from); }
   if (req.query.to) { w.push('r.date<=?'); p.push(req.query.to); }
@@ -318,14 +329,14 @@ app.post('/api/reports', requireAuth, (req, res) => {
 });
 app.put('/api/reports/:id', requireAuth, (req, res) => {
   const r = db.prepare('SELECT * FROM reports WHERE id=?').get(req.params.id);
-  if (!r || (!isAdmin(req) && r.teacher_id !== req.user.id)) return res.status(403).json({ error: 'forbidden' });
+  if (!r || (r.teacher_id !== req.user.id && !hasPerm(req, 'reports'))) return res.status(403).json({ error: 'forbidden' });
   const o = reportBody(req.body, r);
   db.prepare(`UPDATE reports SET ${REPORT_COLS.map(c => c + '=?').join(',')} WHERE id=?`).run(...REPORT_COLS.map(c => o[c]), req.params.id);
   res.json({ ok: true });
 });
 app.delete('/api/reports/:id', requireAuth, (req, res) => {
   const r = db.prepare('SELECT * FROM reports WHERE id=?').get(req.params.id);
-  if (!r || (!isAdmin(req) && r.teacher_id !== req.user.id)) return res.status(403).json({ error: 'forbidden' });
+  if (!r || (r.teacher_id !== req.user.id && !hasPerm(req, 'reports'))) return res.status(403).json({ error: 'forbidden' });
   db.prepare('DELETE FROM reports WHERE id=?').run(req.params.id);
   res.json({ ok: true });
 });
@@ -337,7 +348,7 @@ app.get('/api/plans', requireAuth, (req, res) => {
   res.json(rows);
 });
 const SAFE_EXT = /\.(pdf|docx?|pptx?|xlsx?|txt|png|jpe?g|zip|mp4)$/i;
-app.post('/api/plans', requireAdmin, (req, res) => {
+app.post('/api/plans', requirePerm('plans'), (req, res) => {
   const { teacher_id = null, title, content = '', file } = req.body;
   if (!title) return res.status(400).json({ error: 'عنوان لازم است' });
   let file_name = null, file_path = null;
@@ -349,12 +360,12 @@ app.post('/api/plans', requireAdmin, (req, res) => {
   const r = db.prepare('INSERT INTO plans(teacher_id,title,content,file_name,file_path) VALUES (?,?,?,?,?)').run(teacher_id || null, title, content, file_name, file_path);
   res.json({ id: Number(r.lastInsertRowid) });
 });
-app.put('/api/plans/:id', requireAdmin, (req, res) => {
+app.put('/api/plans/:id', requirePerm('plans'), (req, res) => {
   const { teacher_id = null, title, content = '' } = req.body;
   db.prepare('UPDATE plans SET teacher_id=?,title=?,content=? WHERE id=?').run(teacher_id || null, title, content, req.params.id);
   res.json({ ok: true });
 });
-app.delete('/api/plans/:id', requireAdmin, (req, res) => {
+app.delete('/api/plans/:id', requirePerm('plans'), (req, res) => {
   const p = db.prepare('SELECT * FROM plans WHERE id=?').get(req.params.id);
   if (p?.file_path) { try { fs.unlinkSync(path.join(UPLOADS, p.file_path)); } catch {} }
   db.prepare('DELETE FROM plans WHERE id=?').run(req.params.id);
@@ -370,8 +381,9 @@ app.get('/files/:id', requireAuth, (req, res) => {
 
 // ---- payroll ----
 app.get('/api/payroll', requireAuth, (req, res) => {
+  if (isAdmin(req) && !hasPerm(req, 'payroll') && !req.user.teacher_id) return res.status(403).json({ error: 'دسترسی ندارید' });
   const from = req.query.from || '2000-01-01', to = req.query.to || '2100-01-01';
-  const teachers = isAdmin(req) ? db.prepare('SELECT * FROM teachers ORDER BY name').all() : db.prepare('SELECT * FROM teachers WHERE id=?').all(req.user.id);
+  const teachers = hasPerm(req, 'payroll') ? db.prepare('SELECT * FROM teachers ORDER BY name').all() : db.prepare('SELECT * FROM teachers WHERE id=?').all(req.user.id || 0);
   const out = teachers.map(t => {
     const reps = db.prepare('SELECT * FROM reports WHERE teacher_id=? AND date>=? AND date<=? ORDER BY date').all(t.id, from, to);
     const days = new Set(reps.map(r => r.date)).size;
@@ -384,15 +396,15 @@ app.get('/api/payroll', requireAuth, (req, res) => {
   res.json(out);
 });
 app.get('/api/payments', requireAuth, (req, res) => {
-  res.json(isAdmin(req) ? db.prepare('SELECT p.*, t.name teacher_name FROM payments p LEFT JOIN teachers t ON t.id=p.teacher_id ORDER BY p.id DESC').all()
+  res.json(hasPerm(req, 'payroll') ? db.prepare('SELECT p.*, t.name teacher_name FROM payments p LEFT JOIN teachers t ON t.id=p.teacher_id ORDER BY p.id DESC').all()
     : db.prepare('SELECT * FROM payments WHERE teacher_id=? ORDER BY id DESC').all(req.user.id));
 });
-app.post('/api/payments', requireAdmin, (req, res) => {
+app.post('/api/payments', requirePerm('payroll'), (req, res) => {
   const { teacher_id, period_from, period_to, amount, note = '' } = req.body;
   const r = db.prepare('INSERT INTO payments(teacher_id,period_from,period_to,amount,note) VALUES (?,?,?,?,?)').run(teacher_id, period_from, period_to, +amount || 0, note);
   res.json({ id: Number(r.lastInsertRowid) });
 });
-app.delete('/api/payments/:id', requireAdmin, (req, res) => { db.prepare('DELETE FROM payments WHERE id=?').run(req.params.id); res.json({ ok: true }); });
+app.delete('/api/payments/:id', requirePerm('payroll'), (req, res) => { db.prepare('DELETE FROM payments WHERE id=?').run(req.params.id); res.json({ ok: true }); });
 
 // ---- telegram ----
 app.get('/api/telegram/me', requireAuth, (req, res) => {
@@ -402,12 +414,12 @@ app.get('/api/telegram/me', requireAuth, (req, res) => {
   res.json({ linked: !!t.tg_chat_id, code: t.tg_chat_id ? null : t.tg_code, bot: setting('tg_bot_username', 'hamraheteam_bot') });
 });
 app.post('/api/telegram/unlink', requireAuth, (req, res) => { if (req.user.teacher_id) db.prepare('UPDATE teachers SET tg_chat_id=NULL, tg_code=NULL WHERE id=?').run(req.user.teacher_id); res.json({ ok: true }); });
-app.get('/api/telegram/status', requireAdmin, (req, res) => res.json({ ...bot.status(), admin: setting('tg_admin', ''), bot: setting('tg_bot_username', 'hamraheteam_bot'), teachers: db.prepare('SELECT id,name,tg_chat_id IS NOT NULL linked FROM teachers').all() }));
-app.put('/api/telegram/settings', requireAdmin, (req, res) => {
+app.get('/api/telegram/status', requirePerm('settings'), (req, res) => res.json({ ...bot.status(), admin: setting('tg_admin', ''), bot: setting('tg_bot_username', 'hamraheteam_bot'), teachers: db.prepare('SELECT id,name,tg_chat_id IS NOT NULL linked FROM teachers').all() }));
+app.put('/api/telegram/settings', requireMain, (req, res) => {
   for (const k of ['tg_token', 'tg_admin', 'tg_api_base', 'tg_bot_username']) if (k in req.body) db.prepare('INSERT INTO settings VALUES(?,?) ON CONFLICT(key) DO UPDATE SET value=excluded.value').run(k, String(req.body[k] || ''));
   res.json({ ok: true });
 });
-app.post('/api/telegram/test', requireAdmin, async (req, res) => {
+app.post('/api/telegram/test', requirePerm('settings'), async (req, res) => {
   try { const r = await fetch(`${setting('tg_api_base', 'https://api.telegram.org')}/bot${setting('tg_token', '')}/getMe`, { signal: AbortSignal.timeout(15000) }).then(r => r.json()); res.json(r); }
   catch (e) { res.status(502).json({ error: 'سرور به تلگرام دسترسی ندارد: ' + e.message }); }
 });
