@@ -367,3 +367,45 @@ body.fs .board{grid-template-columns:minmax(0,1fr) 260px}
 #v-week:fullscreen .cls .t{font-size:15px}#v-week:fullscreen .cls .s{font-size:12.5px}
 
 @media print{.side,.topbar .row,.overlay,.drawer,.toast{display:none!important}.main{padding:0}.card{box-shadow:none;border:1px solid #ddd;break-inside:avoid}}
+
+/* ================= time-grid board ================= */
+.board .tt{grid-template-columns:44px repeat(7,minmax(0,1fr));gap:4px}
+.board .tt .col{position:relative;display:flex;flex-direction:column;min-height:calc(100vh - 235px);padding:4px;gap:0;overflow:visible}
+.board .tt .col h4{margin:0 0 4px;flex:0 0 auto}
+.board .tt .col-in{position:relative;flex:1;min-height:0;border-radius:8px;overflow:visible}
+.board .tt .grid-lines{position:absolute;inset:0;background-image:linear-gradient(to bottom,var(--line) 1px,transparent 1px);pointer-events:none;border-radius:8px}
+.board .tt .axis{background:transparent;box-shadow:none;border:0;padding:4px 0}
+.board .tt .axis-in{position:relative;flex:1}
+.board .tt .hr{position:absolute;right:0;left:0;transform:translateY(-50%);font-size:10px;color:var(--muted);text-align:center;font-weight:700;font-variant-numeric:tabular-nums}
+.board .cls{position:absolute;margin:0;overflow:hidden;padding:5px 6px;border-radius:9px;min-height:0!important;box-shadow:0 2px 8px rgba(0,0,0,.14);border:1px solid rgba(255,255,255,.35)}
+.board .cls .t{font-size:11.5px;padding:0}
+.board .cls .s{font-size:10px;margin:0}
+.board .cls.tiny .s.edit-line[data-edit=type],.board .cls.tiny .s.edit-line[data-edit=title],.board .cls.tiny details,.board .cls.tiny .warn-tag{display:none}
+.board .cls .warn-tag{margin-top:2px;font-size:9.5px;padding:1px 5px}
+.board .cls details.n summary{font-size:10px;padding:0 6px}
+.board .cls .color-line{top:4px;left:4px}
+.board .tgrp,.board .tg-h{display:none}
+.drop-day.over .col-in{background:var(--accent-soft)}
+/* ================= dark theme ================= */
+:root[data-theme=dark]{--bg:#0f1220;--card:#181c2e;--ink:#e8eaf6;--muted:#9aa1c0;--line:#2a3050;--soft:#1f2440;--accent:#7c7cf0;--accent-2:#9b8cf7;--accent-soft:#26295a;--shadow:0 4px 18px rgba(0,0,0,.35);--shadow-lg:0 14px 40px rgba(0,0,0,.6);color-scheme:dark}
+:root[data-theme=dark] body{background:var(--bg)}
+:root[data-theme=dark] input,:root[data-theme=dark] select,:root[data-theme=dark] textarea{background:#12162a;color:var(--ink);border-color:var(--line)}
+:root[data-theme=dark] .card,:root[data-theme=dark] .modal,:root[data-theme=dark] .tt .col,:root[data-theme=dark] .jm,:root[data-theme=dark] .jpick,:root[data-theme=dark] .rep,:root[data-theme=dark] .stat,:root[data-theme=dark] .cal-wrap,:root[data-theme=dark] .cal td,:root[data-theme=dark] .drawer-in,:root[data-theme=dark] .tgroup,:root[data-theme=dark] .tgroup .stu,:root[data-theme=dark] .member,:root[data-theme=dark] .att-chip,:root[data-theme=dark] .rchip{background:var(--card);border-color:var(--line);color:var(--ink)}
+:root[data-theme=dark] .stu,:root[data-theme=dark] .roster,:root[data-theme=dark] .chip,:root[data-theme=dark] .box,:root[data-theme=dark] .tt .col h4,:root[data-theme=dark] th,:root[data-theme=dark] .jm-c,:root[data-theme=dark] .dstats div,:root[data-theme=dark] .pool-tabs,:root[data-theme=dark] .cal .wk,:root[data-theme=dark] .cal th{background:var(--soft);color:var(--ink);border-color:var(--line)}
+:root[data-theme=dark] .pool-tabs .pt.active{background:var(--card);color:var(--accent-2)}
+:root[data-theme=dark] .btn.ghost{background:var(--card);color:var(--ink);border-color:var(--line)}
+:root[data-theme=dark] .btn.ghost:hover{background:var(--soft)}
+:root[data-theme=dark] .side .nav.active{background:var(--accent);color:#fff}
+:root[data-theme=dark] tr:hover td{background:var(--soft)}
+:root[data-theme=dark] .cls .inline-ed{background:var(--card);color:var(--ink)}
+:root[data-theme=dark] .cal td.off{background:#12162a;color:#4b5170}
+:root[data-theme=dark] .cal td.holiday,:root[data-theme=dark] .jm-c.hol{background:#3b1d24;color:#fca5a5}
+:root[data-theme=dark] .sess{border-color:var(--line)}:root[data-theme=dark] .sess.missing{background:#3a2a10}:root[data-theme=dark] .sess .srep{background:#13301f}
+:root[data-theme=dark] .conf-box.ok{background:#12301f;color:#86efac}:root[data-theme=dark] .conf-box.bad{background:#3b1d24;color:#fca5a5}
+:root[data-theme=dark] .dropzone{background:var(--soft);border-color:var(--line)}
+:root[data-theme=dark] .warn-tag{background:#2b2417;color:#fbbf24}
+:root[data-theme=dark] .login .card{background:var(--card)}
+:root[data-theme=dark] .toast{background:#e8eaf6;color:#0f1220}:root[data-theme=dark] .toast.ok{background:var(--ok);color:#fff}:root[data-theme=dark] .toast.bad{background:var(--bad);color:#fff}
+:root[data-theme=dark] .tg-h span,:root[data-theme=dark] .filter-bar{color:var(--ink)}
+
+.board .tt .col{min-height:calc(100vh - 290px)}

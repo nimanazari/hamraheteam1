@@ -66,3 +66,8 @@ function jalaliInput(isoInput, opts = {}) {
   isoInput._j = t; return t;
 }
 const setISO = (input, iso) => { input.value = iso; if (input._j) input._j.value = jStr(iso); };
+
+// ---- theme (light/dark), remembered per browser ----
+(function () { try { const t = localStorage.getItem('theme'); if (t) document.documentElement.dataset.theme = t; } catch {} })();
+function toggleTheme() { const d = document.documentElement.dataset.theme === 'dark' ? 'light' : 'dark'; document.documentElement.dataset.theme = d; try { localStorage.setItem('theme', d); } catch {} const ic = document.getElementById('theme-ic'); if (ic) ic.textContent = d === 'dark' ? '☀️' : '🌙'; }
+document.addEventListener('DOMContentLoaded', () => { const ic = document.getElementById('theme-ic'); if (ic) ic.textContent = document.documentElement.dataset.theme === 'dark' ? '☀️' : '🌙'; });

@@ -72,6 +72,7 @@ setting('slots', JSON.stringify(['10:00-12:00', '12:00-14:00', '14:00-16:00']));
 setting('tg_token', process.env.TG_TOKEN || ''); setting('tg_admin', 'academynz'); setting('tg_api_base', 'https://api.telegram.org'); setting('tg_stamps', '{}');
 setting('color_mode', 'teacher');
 setting('holidays', '');
+setting('grid_start', '07:30'); setting('grid_end', '19:00');
 setting('term_start', '2026-09-23'); setting('classes_start', '2026-09-25'); setting('term_end', '2027-05-21'); setting('term_weeks', '18');
 
 // ---- auth ----
@@ -214,12 +215,12 @@ app.post('/api/classes/bulk', requirePerm('board'), (req, res) => {
 
 // ---- meta ----
 app.get('/api/meta', requireAuth, (req, res) => {
-  res.json({ days: DAYS, slots: JSON.parse(setting('slots', '[]')), term_start: setting('term_start', '2026-09-23'), classes_start: setting('classes_start', '2026-09-25'), term_end: setting('term_end', '2027-05-21'), term_weeks: +setting('term_weeks', '18'), color_mode: setting('color_mode', 'teacher'), holidays: (() => { try { return JSON.parse(setting('holidays', '') || 'null'); } catch { return null; } })() });
+  res.json({ days: DAYS, slots: JSON.parse(setting('slots', '[]')), term_start: setting('term_start', '2026-09-23'), classes_start: setting('classes_start', '2026-09-25'), term_end: setting('term_end', '2027-05-21'), term_weeks: +setting('term_weeks', '18'), color_mode: setting('color_mode', 'teacher'), grid_start: setting('grid_start', '07:30'), grid_end: setting('grid_end', '19:00'), holidays: (() => { try { return JSON.parse(setting('holidays', '') || 'null'); } catch { return null; } })() });
 });
 app.put('/api/meta/holidays', requirePerm('board'), (req, res) => { db.prepare("UPDATE settings SET value=? WHERE key='holidays'").run(JSON.stringify(req.body.holidays || {})); res.json({ ok: true }); });
 app.put('/api/meta/slots', requirePerm('settings'), (req, res) => { db.prepare("UPDATE settings SET value=? WHERE key='slots'").run(JSON.stringify(req.body.slots || [])); res.json({ ok: true }); });
 app.put('/api/meta/term', requirePerm('settings'), (req, res) => {
-  for (const k of ['term_start', 'classes_start', 'term_weeks', 'term_end', 'color_mode']) if (req.body[k]) db.prepare('UPDATE settings SET value=? WHERE key=?').run(String(req.body[k]), k);
+  for (const k of ['term_start', 'classes_start', 'term_weeks', 'term_end', 'color_mode', 'grid_start', 'grid_end']) if (req.body[k]) db.prepare('UPDATE settings SET value=? WHERE key=?').run(String(req.body[k]), k);
   res.json({ ok: true });
 });
 app.put('/api/meta/admin-password', requireMain, (req, res) => { db.prepare("UPDATE settings SET value=? WHERE key='admin_password'").run(String(req.body.password || 'admin')); res.json({ ok: true }); });
