@@ -248,6 +248,7 @@ function renderBoard() {
         ${needsStudents(c) ? `<details class="n" onclick="event.stopPropagation()"><summary>🎒 ${fa(c.students.length)}</summary><div class="n">${c.students.map(s => `<span class="mini chip-in" draggable="true" data-type="student" data-id="${s.id}" data-from="${c.id}" title="${esc(s.name)} — بکشید تا خارج شود">${esc(s.name)}</span>`).join('')}</div></details>` : ''}
         ${warn ? `<div class="warn-tag">⚠️ ${warn}</div>` : ''}
         <label class="color-line" title="رنگ این کلاس"><input type="color" value="${cardColor(c)}" onclick="event.stopPropagation()" onmousedown="event.stopPropagation()" onchange="setClassColor(${c.id}, this.value)"></label>
+        <div class="open-only"><button class="btn sm" onclick="event.stopPropagation();openClass(${c.id})">✏️ ویرایش کامل</button></div>
       </div>`;
     }).join('')}</div></div>`;
   }).join('');
@@ -426,7 +427,8 @@ function bindDrops() {
     card.ondrop = e => { e.preventDefault(); e.stopPropagation(); card.classList.remove('over'); card.closest('.drop-day').classList.remove('over'); handleDrop(JSON.parse(e.dataTransfer.getData('text/plain')), { cls: +card.dataset.cls }); };
     card.ondragstart = e => { e.dataTransfer.setData('text/plain', JSON.stringify({ type: 'class', id: +card.dataset.cls })); card.classList.add('dragging'); };
     card.ondragend = () => card.classList.remove('dragging');
-    card.onclick = e => { e.stopPropagation(); if (picked) { const p = picked; unpick(); handleDrop(p, { cls: +card.dataset.cls }); } else openClass(+card.dataset.cls); };
+    card.onclick = e => { e.stopPropagation(); if (picked) { const p = picked; unpick(); return handleDrop(p, { cls: +card.dataset.cls }); } const was = card.classList.contains('open'); $$('.cls.open').forEach(x => x.classList.remove('open')); if (!was) card.classList.add('open'); };
+    card.ondblclick = e => { e.stopPropagation(); openClass(+card.dataset.cls); };
   });
 }
 
@@ -543,6 +545,7 @@ async function setClassColor(id, color) { const c = classes.find(x => x.id === i
 function togglePool(force) { const b = $('.board'); const open = force ?? !b.classList.contains('pool-open'); b.classList.toggle('pool-open', open); $('#pool-btn').classList.toggle('ghost', open); try { localStorage.setItem('poolOpen', open ? '1' : '0'); } catch {} }
 document.addEventListener('DOMContentLoaded', () => { try { togglePool(localStorage.getItem('poolOpen') === '1'); } catch { togglePool(false); } });
 function toggleFull() { const el = $('#v-board'); if (document.fullscreenElement) document.exitFullscreen(); else el.requestFullscreen?.(); }
+document.addEventListener('click', e => { if (!e.target.closest('.cls')) $$('.cls.open').forEach(x => x.classList.remove('open')); });
 document.addEventListener('fullscreenchange', () => document.body.classList.toggle('fs', !!document.fullscreenElement));
 async function undo() { try { const r = await api('/api/undo', 'POST'); toast('برگشت: ' + r.label, 'ok'); reloadClasses(); } catch (e) { toast(e.message, 'bad'); } }
 async function redo() { try { const r = await api('/api/redo', 'POST'); toast('تکرار: ' + r.label, 'ok'); reloadClasses(); } catch (e) { toast(e.message, 'bad'); } }

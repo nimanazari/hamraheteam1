@@ -425,3 +425,14 @@ body.fs .board{grid-template-columns:minmax(0,1fr) 260px}
 .board .cls.tiny:hover .s.edit-line[data-edit=type],.board .cls.tiny:hover .s.edit-line[data-edit=title],.board .cls.tiny:hover details,.board .cls.tiny:hover .warn-tag{display:block}
 .board .tt .col{min-height:calc(100vh - 250px)}
 .board .tt .col h4{font-size:12.5px}
+
+/* click-to-expand cards (no hover jumping) */
+.board .cls:hover{z-index:auto;min-width:0;height:inherit;min-height:0!important;box-shadow:0 2px 8px rgba(0,0,0,.14);transform:none}
+.board .cls.tiny:hover .s.edit-line[data-edit=type],.board .cls.tiny:hover .s.edit-line[data-edit=title],.board .cls.tiny:hover details,.board .cls.tiny:hover .warn-tag{display:none}
+.board .cls .open-only{display:none}
+.board .cls.open{z-index:30;min-width:200px;width:auto!important;height:auto!important;min-height:150px!important;box-shadow:0 14px 36px rgba(0,0,0,.4);outline:3px solid #fff;transition:.15s}
+.board .cls.open .s.edit-line,.board .cls.open details,.board .cls.open .warn-tag,.board .cls.open .open-only{display:block}
+.board .cls.open details.n{display:block}.board .cls.open details.n[open] .n,.board .cls.open details.n .n{display:flex}
+.board .cls.open .open-only{margin-top:6px;text-align:center}
+.board .cls.open .t{font-size:15px}.board .cls.open .s{font-size:12px}
+.board .cls{transition:box-shadow .15s}
