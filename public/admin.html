@@ -31,13 +31,14 @@
         <h2>تخته هفتگی</h2>
         <div class="row">
           <select id="f-teacher" style="width:160px"><option value="">همه دبیران</option></select>
-          <select id="f-school" style="width:160px"><option value="">همه مدارس</option></select>
+          <select id="f-school" style="width:160px"><option value="">همه محل‌ها</option></select>
           <button class="btn ghost" id="btn-undo" onclick="undo()" title="برگرداندن آخرین تغییر (Ctrl+Z)">↶ برگرد</button>
           <button class="btn ghost" id="btn-redo" onclick="redo()" title="تکرار (Ctrl+Y)">↷ تکرار</button>
           <button class="btn ghost" onclick="openHistory()">🕘 نسخه‌ها</button>
         </div>
       </div>
       <div class="stats" id="stats"></div>
+      <div id="filter-bar" class="filter-bar"></div>
       <div class="board">
         <div class="tt" id="tt"></div>
         <div class="pool-panel card">
@@ -111,7 +112,11 @@
       <div class="topbar"><h2>تنظیمات</h2></div>
       <div class="grid3">
         <div class="card"><h3>بازه‌های زمانی پیش‌فرض</h3><p class="muted" style="font-size:12px">هر خط یک بازه، مثل 10:00-12:00</p><textarea id="set-slots"></textarea><button class="btn" onclick="saveSlots()">ذخیره</button></div>
-        <div class="card"><h3>ترم</h3>
+        <div class="card"><h3>🎨 رنگ کارت‌ها</h3>
+          <div class="field"><label>مبنای رنگ کلاس‌ها</label><select id="set-cmode"><option value="teacher">رنگ دبیر</option><option value="school">رنگ محل برگزاری</option></select></div>
+          <p class="muted" style="font-size:12px">رنگ هر دبیر از تب «دبیران» و رنگ هر محل از تب «مدارس» تغییر می‌کند. روی هر کارت هم می‌توانید رنگ جداگانه بگذارید (🎨 روی کارت).</p>
+          <button class="btn" onclick="saveTerm()">ذخیره</button></div>
+        <div class="card"><h3>ترم (تاریخ شمسی)</h3>
           <div class="field"><label>شروع ترم (۱ مهر)</label><input type="date" id="set-term"></div>
           <div class="field"><label>شروع کلاس‌ها</label><input type="date" id="set-cstart"></div>
           <div class="field"><label>پایان ترم (۳۱ اردیبهشت)</label><input type="date" id="set-end"></div>
@@ -123,6 +128,10 @@
           <div class="field"><label>آدرس API (پیش‌فرض تلگرام؛ اگر سرور فیلتر است آدرس رله را بگذارید)</label><input id="tg-base" dir="ltr"></div>
           <div class="row"><button class="btn" onclick="saveTg()">ذخیره</button><button class="btn ghost" onclick="testTg()">تست اتصال</button></div>
           <div id="tg-status" class="muted" style="font-size:12px;margin-top:8px"></div></div>
+        <div class="card"><h3>🔑 رمز عبور من</h3>
+          <div class="field"><label>رمز فعلی</label><input type="password" id="my-old"></div>
+          <div class="field"><label>رمز جدید</label><input type="password" id="my-new"></div>
+          <button class="btn" onclick="changeMyPass()">تغییر رمز</button></div>
         <div class="card"><h3>رمز مدیر</h3><div class="field"><input id="set-pass" type="password" placeholder="رمز جدید"></div><button class="btn" onclick="savePass()">تغییر رمز</button></div>
       </div>
     </section>
@@ -137,6 +146,7 @@ let poolTab = 'teachers';
 const TYPES = { public: 'عمومی', robotic: 'رباتیک', private: 'خصوصی' };
 const TYPE_ICON = { public: '🏫', robotic: '🤖', private: '👤' };
 const needsStudents = c => c.type !== 'public';
+const cardColor = c => c.color || (meta.color_mode === 'school' ? (c.school_color || c.teacher_color) : c.teacher_color) || '#8b93a7';
 const cardWarn = c => c.type === 'public' ? (!c.school_id ? 'مدرسه را انتخاب کنید' : '') : (!c.students.length ? 'دانش‌آموز اضافه کنید' : '');
 let picked = null; // {type, id} for tap-to-place on touch devices
 const TOUCH = matchMedia('(pointer: coarse)').matches;
@@ -150,8 +160,8 @@ async function loadAll() {
   const sOpts = schools.map(s => `<option value="${s.id}">${esc(s.name)}</option>`).join('');
   ['#f-teacher', '#rep-teacher', '#c-teacher'].forEach(s => { const v = $(s).value; $(s).innerHTML = '<option value="">همه دبیران</option>' + tOpts; $(s).value = v; });
   ['#f-school', '#pool-school'].forEach(s => { const v = $(s).value; $(s).innerHTML = '<option value="">همه مدارس</option>' + sOpts; $(s).value = v; });
-  if (ME && !ME.main) { $$('#v-settings .card').forEach(c => { if (/رمز مدیر|تلگرام/.test(c.querySelector('h3')?.textContent || '')) c.style.display = 'none'; }); }
-  $('#set-slots').value = meta.slots.join('\n'); $('#set-term').value = meta.term_start; $('#set-cstart').value = meta.classes_start; $('#set-end').value = meta.term_end; updateBadge();
+  if (ME && !ME.main) { $$('#v-settings .card').forEach(c => { if (/^رمز مدیر|تلگرام/.test(c.querySelector('h3')?.textContent || '')) c.style.display = 'none'; }); }
+  $('#set-slots').value = meta.slots.join('\n'); $('#set-term').value = meta.term_start; $('#set-cstart').value = meta.classes_start; $('#set-end').value = meta.term_end; $('#set-cmode').value = meta.color_mode || 'teacher'; ['#set-term', '#set-cstart', '#set-end', '#pay-from', '#pay-to', '#rep-from', '#rep-to'].forEach(id => { const el = $(id); if (el && !el._j) jalaliInput(el); else if (el) el._j.value = jStr(el.value); }); updateBadge();
   renderBoard(); renderPool(); renderTeachers(); renderStudents(); renderSchools(); refreshUndo();
   if ($('#v-calendar').classList.contains('active')) renderCal();
 }
@@ -163,19 +173,22 @@ const clsLabel = c => c.teacher_name ? c.teacher_name + (c.title ? ' · ' + c.ti
 /* ================= BOARD ================= */
 function renderBoard() {
   const ft = +$('#f-teacher').value, fs = +$('#f-school').value, td = todayDayIndex();
+  $('#filter-bar').innerHTML = (ft || fs) ? `🔎 فقط ${ft ? 'دبیر <b>' + esc(teacherById(ft)?.name || '') + '</b>' : ''} ${fs ? 'محل <b>' + esc(schoolName(fs)) + '</b>' : ''} نمایش داده می‌شود <button class="btn ghost sm" onclick="$('#f-teacher').value='';$('#f-school').value='';renderBoard()">✕ نمایش همه</button>` : '';
   $('#stats').innerHTML = [['📚', classes.length, 'کلاس در هفته'], ['👩‍🏫', teachers.length, 'دبیر'], ['🎒', students.filter(s => s.active).length, 'دانش‌آموز فعال'], ['🏫', schools.length, 'مدرسه']].map(([i, n, l]) => `<div class="stat"><i>${i}</i><div><b>${fa(n)}</b><span>${l}</span></div></div>`).join('');
   $('#tt').innerHTML = meta.days.map((d, i) => {
-    const list = classes.filter(c => c.day === i).sort((a, b) => a.start.localeCompare(b.start) || a.end.localeCompare(b.end));
+    const list = classes.filter(c => c.day === i && !((ft && c.teacher_id !== ft) || (fs && c.school_id !== fs))).sort((a, b) => a.start.localeCompare(b.start) || a.end.localeCompare(b.end));
     const groups = []; list.forEach(c => { const k = c.start + '-' + c.end; let g = groups.find(x => x.k === k); if (!g) groups.push(g = { k, start: c.start, end: c.end, items: [] }); g.items.push(c); });
     return `<div class="col drop-day ${i === td ? 'today' : ''} ${i >= 5 ? 'office' : ''}" data-day="${i}"><h4><span class="hb" title="کلاس جدید در ${d}" onclick="event.stopPropagation();newOnDay(${i})">＋</span>${d}<span class="hb" title="عملیات روی کل روز" onclick="event.stopPropagation();dayMenu(${i})">⋯</span></h4>${groups.map(g => `<div class="tgrp ${g.items.length > 1 ? 'multi' : ''}"><div class="tg-h">⏰ ${fa(g.start)} تا ${fa(g.end)}${g.items.length > 1 ? ` <span>${fa(g.items.length)} کلاس همزمان</span>` : ''}</div>${g.items.map(c => {
-      const dim = (ft && c.teacher_id !== ft) || (fs && c.school_id !== fs);
+      const hide = (ft && c.teacher_id !== ft) || (fs && c.school_id !== fs);
+      if (hide) return '';
       const warn = cardWarn(c);
-      return `<div class="cls drop-cls ${dim ? 'dim' : ''} ${warn ? 'warn' : ''}" draggable="true" data-cls="${c.id}" style="background:${c.teacher_color || '#8b93a7'}" title="${esc(c.note)}">
+      return `<div class="cls drop-cls ${warn ? 'warn' : ''}" draggable="true" data-cls="${c.id}" style="background:${cardColor(c)}" title="${esc(c.note)}">
         <div class="t">${c.teacher_id ? `<span class="chip-in" draggable="true" data-type="teacher" data-id="${c.teacher_id}" data-from="${c.id}" title="بکشید تا از کلاس خارج شود">👤 ${esc(c.teacher_name)}</span>` : '<span class="faint">👤 بدون دبیر</span>'}</div>
         <div class="s edit-line" data-edit="school" data-cls="${c.id}" title="کلیک: انتخاب محل برگزاری">📍 ${c.school_name ? esc(c.school_name) : '<span class="faint">محل برگزاری؟</span>'}</div>
         <div class="s edit-line" data-edit="title" data-cls="${c.id}" title="کلیک: نام کلاس">🏷 ${c.title ? esc(c.title) : '<span class="faint">نام کلاس (دلخواه)</span>'}</div>
         <div class="s edit-line" data-edit="type" data-cls="${c.id}" title="کلیک: نوع کلاس">${TYPE_ICON[c.type] || '🤖'} ${TYPES[c.type] || 'رباتیک'}</div>
         <div class="s edit-line" data-edit="slot" data-cls="${c.id}" title="کلیک: تغییر ساعت">⏰ ${fa(c.start)} تا ${fa(c.end)}</div>
+        <label class="s color-line" title="رنگ این کلاس"><span>🎨</span><input type="color" value="${cardColor(c)}" onclick="event.stopPropagation()" onmousedown="event.stopPropagation()" onchange="setClassColor(${c.id}, this.value)">${c.color ? `<span class="x" onclick="event.stopPropagation();setClassColor(${c.id}, null)" title="برگشت به رنگ پیش‌فرض">↺</span>` : ''}</label>
         ${needsStudents(c) ? `<div class="n"><span>${fa(c.students.length)} دانش‌آموز</span>${c.students.map(s => `<span class="mini chip-in" draggable="true" data-type="student" data-id="${s.id}" data-from="${c.id}" title="${esc(s.name)} — بکشید تا خارج شود">${esc(s.name)}</span>`).join('')}</div>` : '<div class="n"><span>فقط مدرسه · بدون دانش‌آموز</span></div>'}
         ${warn ? `<div class="warn-tag">⚠️ ${warn}</div>` : ''}
       </div>`;
@@ -282,6 +295,12 @@ async function updateBadge() {
   } catch {}
 }
 setInterval(updateBadge, 60000);
+let lastVer = null, dragging = false;
+document.addEventListener('dragstart', () => dragging = true); document.addEventListener('dragend', () => dragging = false);
+setInterval(async () => {
+  if (!ME || !$('#v-board').classList.contains('active') || dragging || $('#overlay').classList.contains('show') || document.querySelector('.inline-ed')) return;
+  try { const { v } = await api('/api/classes/version'); if (lastVer && v !== lastVer) { [classes, schools, teachers] = await Promise.all([api('/api/classes'), api('/api/schools'), api('/api/teachers')]); renderBoard(); renderPool(); refreshUndo(); } lastVer = v; } catch {}
+}, 8000);
 function bindTeacherDrops() {
   bindChips($('#pool'));
   $$('.drop-teacher').forEach(g => {
@@ -295,8 +314,9 @@ function inlineEdit(line) {
   const id = +line.dataset.cls, kind = line.dataset.edit, c = classes.find(x => x.id === id);
   let el;
   if (kind === 'school') {
-    el = document.createElement('select');
-    el.innerHTML = '<option value="">— محل برگزاری —</option>' + schools.map(x => `<option value="${x.id}" ${x.id === c.school_id ? 'selected' : ''}>${esc(x.name)}</option>`).join('');
+    el = document.createElement('input'); el.setAttribute('list', 'school-list'); el.placeholder = 'نام محل را بنویسید یا انتخاب کنید'; el.value = c.school_name || '';
+    if (!$('#school-list')) { const dl = document.createElement('datalist'); dl.id = 'school-list'; document.body.appendChild(dl); }
+    $('#school-list').innerHTML = schools.map(x => `<option value="${esc(x.name)}">`).join('');
   } else if (kind === 'type') {
     el = document.createElement('select');
     el.innerHTML = Object.entries(TYPES).map(([k, v]) => `<option value="${k}" ${k === c.type ? 'selected' : ''}>${TYPE_ICON[k]} ${v}</option>`).join('');
@@ -316,13 +336,14 @@ function inlineEdit(line) {
   el.className = 'inline-ed';
   const commit = async () => {
     const body = bodyOf(c);
-    if (kind === 'school') body.school_id = +el.value || null;
+    if (kind === 'school') body.school_id = await schoolIdFor(el.value);
     else if (kind === 'title') body.title = el.value.trim();
     else if (kind === 'type') { body.type = el.value; if (body.type === 'public' && body.student_ids.length && !confirm('کلاس عمومی دانش‌آموز نمی‌گیرد. دانش‌آموزهای این کلاس حذف شوند؟')) { renderBoard(); return; } }
     try { await saveWithConfirm(body, id); await reloadClasses(); } catch (e) { renderBoard(); if (e.message !== 'cancel') toast(e.message, 'bad'); }
   };
-  el.onchange = commit;
-  el.onblur = () => { if (kind === 'title') commit(); else if (!el.value && kind !== 'title') renderBoard(); };
+  let committed = false; const once = () => { if (!committed) { committed = true; commit(); } };
+  el.onchange = once;
+  el.onblur = () => { if (kind === 'title' || kind === 'school') once(); else if (!el.value) renderBoard(); };
   el.onkeydown = e => { if (e.key === 'Enter') { e.preventDefault(); el.blur(); } if (e.key === 'Escape') renderBoard(); };
   el.onclick = e => e.stopPropagation();
   el.onmousedown = e => e.stopPropagation();
@@ -398,7 +419,7 @@ async function handleDrop(item, target) {
     await reloadClasses();
   } catch (e) { if (e.message !== 'cancel') toast(e.message, 'bad'); }
 }
-const bodyOf = c => ({ type: c.type || 'robotic', title: c.title, teacher_id: c.teacher_id, school_id: c.school_id, day: c.day, start: c.start, end: c.end, note: c.note, student_ids: [...c.student_ids] });
+const bodyOf = c => ({ color: c.color || null, type: c.type || 'robotic', title: c.title, teacher_id: c.teacher_id, school_id: c.school_id, day: c.day, start: c.start, end: c.end, note: c.note, student_ids: [...c.student_ids] });
 async function saveWithConfirm(body, id, force = false) {
   try {
     const r = id ? await api('/api/classes/' + id, 'PUT', { ...body, force }) : await api('/api/classes', 'POST', { ...body, force });
@@ -413,11 +434,16 @@ async function saveWithConfirm(body, id, force = false) {
   }
 }
 function quickNew() { handleDrop({ type: 'none' }, { day: todayDayIndex() }); }
+async function schoolIdFor(name) {
+  name = (name || '').trim(); if (!name) return null;
+  const f = schools.find(x => x.name === name); if (f) return f.id;
+  const r = await api('/api/schools', 'POST', { name }); schools = await api('/api/schools'); renderSchools(); toast(`محل جدید «${name}» ساخته شد`, 'ok'); return r.id;
+}
 function newOnDay(day) {
   openModal(`<h2>کلاس جدید · ${meta.days[day]}</h2>
     <div class="grid2"><div class="field"><label>دبیر</label><select id="n-teacher"><option value="">— بعداً —</option>${teachers.map(t => `<option value="${t.id}">${esc(t.name)}</option>`).join('')}</select></div>
     <div class="field"><label>نوع</label><select id="n-type">${Object.entries(TYPES).map(([k, v]) => `<option value="${k}">${TYPE_ICON[k]} ${v}</option>`).join('')}</select></div>
-    <div class="field"><label>مدرسه / محل</label><select id="n-school"><option value="">—</option>${schools.map(x => `<option value="${x.id}">${esc(x.name)}</option>`).join('')}</select></div>
+    <div class="field"><label>محل برگزاری (تایپ کنید؛ اگر نبود ساخته می‌شود)</label><input id="n-school" list="n-school-list" placeholder="مثلاً نگاه نو"><datalist id="n-school-list">${schools.map(x => `<option value="${esc(x.name)}">`).join('')}</datalist></div>
     <div class="field"><label>ساعت (آزاد)</label><div class="row" style="gap:6px;flex-wrap:nowrap"><input type="time" id="n-start" value="${(meta.slots[0] || '10:00-12:00').split('-')[0]}" step="300"><span>تا</span><input type="time" id="n-end" value="${(meta.slots[0] || '10:00-12:00').split('-')[1]}" step="300"></div>
       <div class="row" style="gap:4px;margin-top:6px">${meta.slots.map(x => `<button type="button" class="btn ghost sm" onclick="const [a,b]='${x}'.split('-');$('#n-start').value=a;$('#n-end').value=b">${fa(x.replace('-', '–'))}</button>`).join('')}</div></div></div>
     <div class="field"><label>عنوان (اختیاری)</label><input id="n-title"></div>
@@ -426,7 +452,7 @@ function newOnDay(day) {
 async function createOnDay(day) {
   const start = $('#n-start').value, end = $('#n-end').value; const tid = +$('#n-teacher').value || null;
   if (!start || !end || start >= end) return toast('ساعت پایان باید بعد از شروع باشد', 'bad');
-  const body = { type: $('#n-type').value, title: $('#n-title').value.trim(), teacher_id: tid, school_id: +$('#n-school').value || null, day, start, end, note: '', student_ids: $('#n-type').value === 'public' ? [] : [...(teacherById(tid)?.student_ids || [])] };
+  const body = { type: $('#n-type').value, title: $('#n-title').value.trim(), teacher_id: tid, school_id: await schoolIdFor($('#n-school').value), day, start, end, note: '', student_ids: $('#n-type').value === 'public' ? [] : [...(teacherById(tid)?.student_ids || [])] };
   try { await saveWithConfirm(body); closeModal(); toast('کلاس ساخته شد', 'ok'); reloadClasses(); } catch (e) { if (e.message !== 'cancel') toast(e.message, 'bad'); }
 }
 function dayMenu(day) {
@@ -448,6 +474,7 @@ async function bulk(action, from_day) {
   try { const r = await api('/api/classes/bulk', 'POST', { action, from_day, to_day }); closeModal(); toast(`${fa(r.count)} کلاس ${action === 'move' ? 'منتقل شد' : action === 'copy' ? 'کپی شد' : 'حذف شد'}`, 'ok'); reloadClasses(); }
   catch (e) { toast(e.message, 'bad'); }
 }
+async function setClassColor(id, color) { const c = classes.find(x => x.id === id); const body = bodyOf(c); body.color = color; await api('/api/classes/' + id, 'PUT', { ...body, force: true }); reloadClasses(); }
 async function undo() { try { const r = await api('/api/undo', 'POST'); toast('برگشت: ' + r.label, 'ok'); reloadClasses(); } catch (e) { toast(e.message, 'bad'); } }
 async function redo() { try { const r = await api('/api/redo', 'POST'); toast('تکرار: ' + r.label, 'ok'); reloadClasses(); } catch (e) { toast(e.message, 'bad'); } }
 async function refreshUndo() { try { const s = await api('/api/snapshots'); $('#btn-undo').disabled = !s.canUndo; $('#btn-redo').disabled = !s.canRedo; } catch {} }
@@ -471,7 +498,7 @@ function openClass(id) {
   openModal(`<div class="row" style="justify-content:space-between"><h2 style="margin:0">ویرایش کلاس</h2><span class="chip">${meta.days[c.day]}</span></div>
     <div class="grid2" style="margin-top:14px">
       <div class="field"><label>دبیر</label><select id="m-teacher"><option value="">— بدون دبیر —</option>${teachers.map(t => `<option value="${t.id}" ${t.id === c.teacher_id ? 'selected' : ''}>${esc(t.name)}</option>`).join('')}</select></div>
-      <div class="field"><label>مدرسه</label><select id="m-school"><option value="">—</option>${schools.map(s => `<option value="${s.id}" ${s.id === c.school_id ? 'selected' : ''}>${esc(s.name)}</option>`).join('')}</select></div>
+      <div class="field"><label>محل برگزاری (تایپ کنید؛ اگر نبود ساخته می‌شود)</label><input id="m-school" list="m-school-list" value="${esc(c.school_name || '')}"><datalist id="m-school-list">${schools.map(s => `<option value="${esc(s.name)}">`).join('')}</datalist></div>
       <div class="field"><label>عنوان</label><input id="m-title" value="${esc(c.title)}" placeholder="مثلاً ریاضی هفتم"></div>
       <div class="field"><label>نوع کلاس</label><select id="m-type">${Object.entries(TYPES).map(([k, v]) => `<option value="${k}" ${k === (c.type || 'robotic') ? 'selected' : ''}>${TYPE_ICON[k]} ${v}</option>`).join('')}</select></div>
       <div class="field"><label>روز</label><select id="m-day">${meta.days.map((d, i) => `<option value="${i}" ${i === c.day ? 'selected' : ''}>${d}</option>`).join('')}</select></div>
@@ -498,7 +525,7 @@ function renderMembers() {
 }
 async function saveModal() {
   const b = M.body;
-  b.type = $('#m-type').value; b.teacher_id = +$('#m-teacher').value || null; b.school_id = +$('#m-school').value || null; b.title = $('#m-title').value.trim(); b.day = +$('#m-day').value; b.note = $('#m-note').value;
+  b.type = $('#m-type').value; b.teacher_id = +$('#m-teacher').value || null; b.school_id = await schoolIdFor($('#m-school').value); b.title = $('#m-title').value.trim(); b.day = +$('#m-day').value; b.note = $('#m-note').value;
   b.start = $('#m-start').value; b.end = $('#m-end').value;
   if (!b.start || !b.end || b.start >= b.end) return toast('بازه زمانی نامعتبر است', 'bad');
   try { await saveWithConfirm(b, M.id); closeModal(); toast('ذخیره شد ✅', 'ok'); reloadClasses(); }
@@ -565,7 +592,7 @@ function editTeacher(id) {
     ${ME.main ? `<div class="box"><label><input type="checkbox" id="m-admin" ${t.is_admin ? 'checked' : ''} style="width:auto;vertical-align:middle" onchange="$('#m-perms').style.display=this.checked?'':'none'"> <b>دسترسی مدیر</b></label>
       <div id="m-perms" style="${t.is_admin ? '' : 'display:none'};margin-top:8px"><label>بخش‌هایی که این مدیر می‌بیند:</label><div class="row" style="gap:8px">${Object.entries(PERM_NAMES).map(([k, v]) => `<label class="chip" style="cursor:pointer"><input type="checkbox" class="m-perm" value="${k}" ${(t.perms || []).includes(k) || (!id && k !== 'payroll') ? 'checked' : ''} style="width:auto;margin:0 0 0 4px"> ${v}</label>`).join('')}</div>
       <p class="muted" style="font-size:11px;margin:6px 0 0">«حقوق» را فقط به کسی بدهید که باید نرخ‌ها و مبالغ همه را ببیند.</p></div>` : ''}
-    <div class="field"><label>رنگ در برنامه</label><div class="row">${COLORS.map(c => `<span class="colorbox ${c === t.color ? 'sel' : ''}" style="background:${c}" onclick="$('#m-color').value='${c}';$$('.colorbox').forEach(b=>b.classList.remove('sel'));this.classList.add('sel')"></span>`).join('')}<input type="hidden" id="m-color" value="${t.color}"></div></div>
+    <div class="field"><label>رنگ در برنامه</label><div class="row">${COLORS.map(c => `<span class="colorbox ${c === t.color ? 'sel' : ''}" style="background:${c}" onclick="$('#m-color').value='${c}';$$('.colorbox').forEach(b=>b.classList.remove('sel'));this.classList.add('sel')"></span>`).join('')}<input type="color" id="m-color" value="${t.color}" class="colorbox" style="padding:2px" title="رنگ دلخواه" onchange="$$('.colorbox').forEach(b=>b.classList.remove('sel'))"></div></div>
     <div class="row" style="justify-content:flex-end"><button class="btn ghost" onclick="closeModal()">انصراف</button><button class="btn" onclick="saveTeacher(${id || 0})">ذخیره</button></div>`);
 }
 async function saveTeacher(id) {
@@ -603,16 +630,17 @@ async function saveStudent(id) {
 
 /* ================= SCHOOLS ================= */
 function renderSchools() {
-  $('#sc-table').innerHTML = `<tr><th>نام</th><th>دانش‌آموزان</th><th>کلاس‌ها</th><th></th></tr>` + schools.map(s => `<tr><td><b>${esc(s.name)}</b></td><td>${fa(students.filter(x => x.school_id === s.id).length)}</td><td>${fa(classes.filter(c => c.school_id === s.id).length)}</td>
+  $('#sc-table').innerHTML = `<tr><th>نام</th><th>دانش‌آموزان</th><th>کلاس‌ها</th><th></th></tr>` + schools.map(s => `<tr><td><b><span class="dot" style="background:${s.color || '#64748b'}"></span>${esc(s.name)}</b></td><td>${fa(students.filter(x => x.school_id === s.id).length)}</td><td>${fa(classes.filter(c => c.school_id === s.id).length)}</td>
     <td><button class="btn ghost sm" onclick="editSchool(${s.id})">ویرایش</button> <button class="btn ghost sm" onclick="del('schools',${s.id})">حذف</button></td></tr>`).join('');
 }
 function editSchool(id) {
   const s = schools.find(x => x.id === id) || { name: '' };
-  openModal(`<h2>${id ? 'ویرایش' : 'افزودن'} مدرسه</h2><div class="field"><label>نام</label><input id="m-name" value="${esc(s.name)}" autofocus></div>
+  openModal(`<h2>${id ? 'ویرایش' : 'افزودن'} محل / مدرسه</h2><div class="field"><label>نام</label><input id="m-name" value="${esc(s.name)}" autofocus></div>
+    <div class="field"><label>رنگ (وقتی مبنای رنگ «محل» باشد)</label><input type="color" id="m-scolor" value="${s.color || '#64748b'}" style="width:60px;height:36px;padding:2px"></div>
     <div class="row" style="justify-content:flex-end"><button class="btn ghost" onclick="closeModal()">انصراف</button><button class="btn" onclick="saveSchool(${id || 0})">ذخیره</button></div>`);
 }
 async function saveSchool(id) {
-  const body = { name: $('#m-name').value.trim() }; if (!body.name) return;
+  const body = { name: $('#m-name').value.trim(), color: $('#m-scolor').value }; if (!body.name) return;
   if (id) await api('/api/schools/' + id, 'PUT', body); else await api('/api/schools', 'POST', body);
   closeModal(); toast('ذخیره شد', 'ok'); loadAll();
 }
@@ -694,7 +722,7 @@ async function delPlan(id) { if (!confirm('حذف شود؟')) return; await api(
 /* ================= PAYROLL ================= */
 const money = n => fa((+n || 0).toLocaleString('en'));
 async function loadPayroll() {
-  if (!$('#pay-from').value) { const d = new Date(); $('#pay-to').value = todayISO(); d.setDate(1); $('#pay-from').value = d.toISOString().slice(0, 10); }
+  if (!$('#pay-from').value) { const [jy, jm] = toJalali(todayISO()); setISO($('#pay-to'), todayISO()); setISO($('#pay-from'), toGregorian(jy, jm, 1)); }
   const rows = await api(`/api/payroll?from=${$('#pay-from').value}&to=${$('#pay-to').value}`);
   const pays = await api('/api/payments');
   $('#pay-table').innerHTML = `<tr><th>دبیر</th><th>نرخ هر روز</th><th>نرخ هر جلسه</th><th>نرخ هر ساعت</th><th>روز</th><th>جلسه</th><th>ساعت</th><th>حقوق محاسبه‌شده</th><th>پرداخت‌شده</th><th></th></tr>` + rows.map(r => `<tr>
@@ -721,7 +749,7 @@ $('#rep-teacher').onchange = loadReports;
 
 /* ================= SETTINGS ================= */
 async function saveSlots() { await api('/api/meta/slots', 'PUT', { slots: $('#set-slots').value.split('\n').map(s => s.trim()).filter(s => /^\d{1,2}:\d{2}-\d{1,2}:\d{2}$/.test(s)) }); toast('ذخیره شد', 'ok'); loadAll(); }
-async function saveTerm() { await api('/api/meta/term', 'PUT', { term_start: $('#set-term').value, classes_start: $('#set-cstart').value, term_end: $('#set-end').value }); toast('ذخیره شد', 'ok'); loadAll(); }
+async function saveTerm() { await api('/api/meta/term', 'PUT', { term_start: $('#set-term').value, classes_start: $('#set-cstart').value, term_end: $('#set-end').value, color_mode: $('#set-cmode').value }); toast('ذخیره شد', 'ok'); loadAll(); }
 async function loadTg() {
   const st = await api('/api/telegram/status');
   $('#tg-bot').value = st.bot || ''; $('#tg-admin').value = st.admin || ''; $('#tg-base').value = st.base || ''; $('#tg-token').placeholder = st.token ? '(توکن ذخیره شده؛ برای تغییر تایپ کنید)' : '123456:ABC...';
@@ -729,6 +757,10 @@ async function loadTg() {
 }
 async function saveTg() { const b = { tg_bot_username: $('#tg-bot').value.trim(), tg_admin: $('#tg-admin').value.trim().replace('@', ''), tg_api_base: $('#tg-base').value.trim() }; if ($('#tg-token').value.trim()) b.tg_token = $('#tg-token').value.trim(); await api('/api/telegram/settings', 'PUT', b); $('#tg-token').value = ''; toast('ذخیره شد', 'ok'); loadTg(); }
 async function testTg() { try { const r = await api('/api/telegram/test', 'POST'); toast(r.ok ? `✅ متصل: @${r.result.username}` : '❌ ' + (r.description || 'خطا'), r.ok ? 'ok' : 'bad'); } catch (e) { toast(e.message, 'bad'); } }
+async function changeMyPass() {
+  try { await api('/api/me/password', 'PUT', { old_password: $('#my-old').value, password: $('#my-new').value }); toast('رمز شما تغییر کرد ✅', 'ok'); $('#my-old').value = $('#my-new').value = ''; }
+  catch (e) { toast(e.message, 'bad'); }
+}
 async function savePass() { const p = $('#set-pass').value; if (!p) return; await api('/api/meta/admin-password', 'PUT', { password: p }); $('#set-pass').value = ''; toast('رمز تغییر کرد', 'ok'); }
 
 let ME = null;

@@ -32,7 +32,7 @@
       <div class="card" style="max-width:820px">
         <h2 id="r-title">گزارش جلسه</h2>
         <div class="grid3">
-          <div class="field"><label>تاریخ</label><input type="date" id="r-date"></div>
+          <div class="field"><label>تاریخ (شمسی)</label><input type="date" id="r-date"></div>
           <div class="field"><label>کلاس</label><select id="r-class"></select></div>
           <div class="field"><label>طرح درس مرجع</label><select id="r-plan"><option value="">— انتخاب —</option></select></div>
         </div>
@@ -99,8 +99,8 @@ async function init() {
   if (me.role === 'admin') $('#admin-link').style.display = '';
   $('#hello').textContent = `سلام ${me.name} 👋`; $('#uname').textContent = me.name;
   [meta, classes, plans] = await Promise.all([api('/api/meta'), api('/api/classes'), api('/api/plans?mine=1')]);
-  renderWeek(); fillSelects(); resetForm();
-  const d = new Date(); $('#h-to').value = todayISO(); d.setDate(d.getDate() - 30); $('#h-from').value = d.toISOString().slice(0, 10);
+  renderWeek(); fillSelects(); resetForm(); jalaliInput($('#r-date')); jalaliInput($('#h-from')); jalaliInput($('#h-to'));
+  const d = new Date(); setISO($('#h-to'), todayISO()); d.setDate(d.getDate() - 30); setISO($('#h-from'), d.toISOString().slice(0, 10));
 }
 function renderWeek() {
   const td = todayDayIndex();
@@ -146,7 +146,7 @@ $('#r-in').onchange = calcDur; $('#r-out').onchange = calcDur;
 function resetForm() {
   editId = null; $('#r-title').textContent = 'گزارش جلسه'; $('#r-cancel').style.display = 'none'; $('#r-save').textContent = 'ثبت گزارش';
   ['#r-lp', '#r-done', '#r-hw', '#r-with', '#r-notes', '#r-fpn', '#r-in', '#r-out', '#r-dur'].forEach(s => $(s).value = '');
-  $('#r-fp').value = '1'; $('#r-plan').value = ''; $('#r-date').value = todayISO();
+  $('#r-fp').value = '1'; $('#r-plan').value = ''; setISO($('#r-date'), todayISO());
   const td = todayDayIndex(); const c = classes.find(x => x.day === td); $('#r-class').value = c ? c.id : ''; onClassChange();
 }
 $('#r-save').onclick = async () => {
@@ -180,7 +180,7 @@ async function loadHist() {
 function editRep(id) {
   const r = reps.find(x => x.id === id); if (!r) return;
   editId = id; nav('report'); $('#r-title').textContent = 'ویرایش گزارش'; $('#r-cancel').style.display = ''; $('#r-save').textContent = 'ذخیره تغییرات';
-  $('#r-date').value = r.date; $('#r-class').value = r.class_id || ''; $('#r-plan').value = r.plan_id || ''; $('#r-in').value = r.check_in; $('#r-out').value = r.check_out; calcDur();
+  setISO($('#r-date'), r.date); $('#r-class').value = r.class_id || ''; $('#r-plan').value = r.plan_id || ''; $('#r-in').value = r.check_in; $('#r-out').value = r.check_out; calcDur();
   $('#r-lp').value = r.lesson_plan; $('#r-fp').value = r.followed_plan ? '1' : '0'; $('#r-fpn').value = r.plan_note; $('#r-done').value = r.done; $('#r-hw').value = r.homework; $('#r-with').value = r.with_whom; $('#r-notes').value = r.notes;
   onClassChange(r.attendance || {});
 }

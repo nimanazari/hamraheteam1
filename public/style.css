@@ -256,3 +256,11 @@ body.dragging-in .pool-panel::before{content:'برای خارج کردن از ک
 .tt .col h4 .hb{width:22px;height:22px;border-radius:7px;display:inline-flex;align-items:center;justify-content:center;cursor:pointer;font-size:14px;opacity:.55;transition:.12s;background:rgba(0,0,0,.05)}
 .tt .col h4 .hb:hover{opacity:1;background:#fff;color:var(--accent);box-shadow:0 2px 6px rgba(0,0,0,.12)}
 .tt .col.today h4 .hb{background:rgba(255,255,255,.2)}.tt .col.today h4 .hb:hover{color:var(--accent)}
+
+.filter-bar{margin:-8px 0 12px;font-size:13px;display:flex;gap:10px;align-items:center;flex-wrap:wrap}
+.filter-bar:empty{display:none}
+.cls .color-line{display:flex;align-items:center;gap:6px;cursor:pointer;opacity:.75}
+.cls .color-line:hover{opacity:1}
+.cls .color-line input[type=color]{width:26px;height:18px;padding:0;border:1px solid rgba(255,255,255,.6);border-radius:5px;background:transparent;cursor:pointer}
+.cls .color-line .x{font-size:12px;cursor:pointer}
+input[type=color].colorbox{width:32px;height:32px}

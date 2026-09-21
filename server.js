@@ -42,6 +42,8 @@ addCol('reports', 'plan_id', 'INTEGER');
 addCol('teachers', 'tg_chat_id', 'TEXT');
 addCol('teachers', 'tg_code', 'TEXT');
 addCol('teachers', 'perms', 'TEXT');
+addCol('classes', 'color', 'TEXT');
+addCol('schools', 'color', 'TEXT');
 const PERMS = ['board', 'calendar', 'teachers', 'students', 'schools', 'reports', 'plans', 'payroll', 'settings'];
 const DEFAULT_PERMS = PERMS.filter(p => p !== 'payroll');
 const permsOf = t => { try { const p = JSON.parse(t.perms || 'null'); return Array.isArray(p) ? p : DEFAULT_PERMS; } catch { return DEFAULT_PERMS; } };
@@ -68,6 +70,7 @@ const setting = (k, d) => { const r = db.prepare('SELECT value FROM settings WHE
 setting('admin_password', 'admin');
 setting('slots', JSON.stringify(['10:00-12:00', '12:00-14:00', '14:00-16:00']));
 setting('tg_token', process.env.TG_TOKEN || ''); setting('tg_admin', 'academynz'); setting('tg_api_base', 'https://api.telegram.org'); setting('tg_stamps', '{}');
+setting('color_mode', 'teacher');
 setting('term_start', '2026-09-23'); setting('classes_start', '2026-09-25'); setting('term_end', '2027-05-21'); setting('term_weeks', '18');
 
 // ---- auth ----
@@ -138,7 +141,7 @@ function classWithStudents(c) {
   return c;
 }
 function allClasses(where = '', params = []) {
-  return db.prepare(`SELECT c.*, t.name teacher_name, t.color teacher_color, sc.name school_name FROM classes c LEFT JOIN teachers t ON t.id=c.teacher_id LEFT JOIN schools sc ON sc.id=c.school_id ${where} ORDER BY c.day, c.start`).all(...params).map(classWithStudents);
+  return db.prepare(`SELECT c.*, t.name teacher_name, t.color teacher_color, sc.name school_name, sc.color school_color FROM classes c LEFT JOIN teachers t ON t.id=c.teacher_id LEFT JOIN schools sc ON sc.id=c.school_id ${where} ORDER BY c.day, c.start`).all(...params).map(classWithStudents);
 }
 function findConflicts({ id, teacher_id, day, start, end, student_ids = [] }) {
   const others = allClasses('WHERE c.day=? AND c.id<>?', [Number(day), Number(id) || 0]).filter(o => overlap({ start, end }, o));
@@ -164,7 +167,7 @@ function restoreData(json) {
   db.exec('BEGIN');
   try {
     db.exec('DELETE FROM class_students; DELETE FROM overrides; DELETE FROM classes;');
-    const cols = ['id', 'title', 'teacher_id', 'school_id', 'day', 'start', 'end', 'note', 'type'];
+    const cols = ['id', 'title', 'teacher_id', 'school_id', 'day', 'start', 'end', 'note', 'type', 'color'];
     const ic = db.prepare(`INSERT INTO classes(${cols.join(',')}) VALUES (${cols.map(() => '?').join(',')})`);
     d.classes.forEach(c => ic.run(...cols.map(k => c[k] ?? (k === 'type' ? 'robotic' : k === 'note' || k === 'title' ? '' : null))));
     const ics = db.prepare('INSERT OR IGNORE INTO class_students VALUES (?,?)'); d.class_students.forEach(x => ics.run(x.class_id, x.student_id));
@@ -203,18 +206,18 @@ app.post('/api/classes/bulk', requirePerm('board'), (req, res) => {
   snapshot(req, 'auto', `${action === 'move' ? 'انتقال' : action === 'copy' ? 'کپی' : 'حذف'} ${list.length} کلاس ${action === 'clear' ? '' : 'به ' + DAYS[to_day]}`);
   const ins = db.prepare('INSERT OR IGNORE INTO class_students VALUES (?,?)');
   if (action === 'move') list.forEach(c => db.prepare('UPDATE classes SET day=? WHERE id=?').run(Number(to_day), c.id));
-  else if (action === 'copy') list.forEach(c => { const id = Number(db.prepare('INSERT INTO classes(title,teacher_id,school_id,day,start,end,note,type) VALUES (?,?,?,?,?,?,?,?)').run(c.title, c.teacher_id, c.school_id, Number(to_day), c.start, c.end, c.note, c.type).lastInsertRowid); c.student_ids.forEach(s => ins.run(id, s)); });
+  else if (action === 'copy') list.forEach(c => { const id = Number(db.prepare('INSERT INTO classes(title,teacher_id,school_id,day,start,end,note,type,color) VALUES (?,?,?,?,?,?,?,?,?)').run(c.title, c.teacher_id, c.school_id, Number(to_day), c.start, c.end, c.note, c.type, c.color || null).lastInsertRowid); c.student_ids.forEach(s => ins.run(id, s)); });
   else if (action === 'clear') list.forEach(c => { for (const t of ['overrides', 'class_students']) db.prepare(`DELETE FROM ${t} WHERE class_id=?`).run(c.id); db.prepare('DELETE FROM classes WHERE id=?').run(c.id); });
   res.json({ ok: true, count: list.length });
 });
 
 // ---- meta ----
 app.get('/api/meta', requireAuth, (req, res) => {
-  res.json({ days: DAYS, slots: JSON.parse(setting('slots', '[]')), term_start: setting('term_start', '2026-09-23'), classes_start: setting('classes_start', '2026-09-25'), term_end: setting('term_end', '2027-05-21'), term_weeks: +setting('term_weeks', '18') });
+  res.json({ days: DAYS, slots: JSON.parse(setting('slots', '[]')), term_start: setting('term_start', '2026-09-23'), classes_start: setting('classes_start', '2026-09-25'), term_end: setting('term_end', '2027-05-21'), term_weeks: +setting('term_weeks', '18'), color_mode: setting('color_mode', 'teacher') });
 });
 app.put('/api/meta/slots', requirePerm('settings'), (req, res) => { db.prepare("UPDATE settings SET value=? WHERE key='slots'").run(JSON.stringify(req.body.slots || [])); res.json({ ok: true }); });
 app.put('/api/meta/term', requirePerm('settings'), (req, res) => {
-  for (const k of ['term_start', 'classes_start', 'term_weeks', 'term_end']) if (req.body[k]) db.prepare('UPDATE settings SET value=? WHERE key=?').run(String(req.body[k]), k);
+  for (const k of ['term_start', 'classes_start', 'term_weeks', 'term_end', 'color_mode']) if (req.body[k]) db.prepare('UPDATE settings SET value=? WHERE key=?').run(String(req.body[k]), k);
   res.json({ ok: true });
 });
 app.put('/api/meta/admin-password', requireMain, (req, res) => { db.prepare("UPDATE settings SET value=? WHERE key='admin_password'").run(String(req.body.password || 'admin')); res.json({ ok: true }); });
@@ -254,7 +257,7 @@ function crud(table, cols, opts = {}) {
   });
   app.delete(`/api/${table}/:id`, perm, (req, res) => { db.prepare(`DELETE FROM ${table} WHERE id=?`).run(req.params.id); if (opts.onDelete) opts.onDelete(req.params.id); res.json({ ok: true }); });
 }
-crud('schools', ['name'], { onDelete: id => { db.prepare('UPDATE students SET school_id=NULL WHERE school_id=?').run(id); db.prepare('UPDATE classes SET school_id=NULL WHERE school_id=?').run(id); } });
+crud('schools', ['name', 'color'], { onDelete: id => { db.prepare('UPDATE students SET school_id=NULL WHERE school_id=?').run(id); db.prepare('UPDATE classes SET school_id=NULL WHERE school_id=?').run(id); } });
 crud('teachers', ['name', 'subject', 'username', 'password', 'color', 'is_admin', 'rate_hour', 'rate_session', 'rate_fixed', 'perms'], { onDelete: id => { db.prepare('UPDATE classes SET teacher_id=NULL WHERE teacher_id=?').run(id); db.prepare('DELETE FROM teacher_students WHERE teacher_id=?').run(id); } });
 crud('students', ['name', 'school_id', 'note', 'active'], { onDelete: id => { db.prepare('DELETE FROM class_students WHERE student_id=?').run(id); db.prepare('DELETE FROM teacher_students WHERE student_id=?').run(id); } });
 app.put('/api/teachers/:id/students', requirePerm('board'), (req, res) => {
@@ -265,16 +268,17 @@ app.put('/api/teachers/:id/students', requirePerm('board'), (req, res) => {
 });
 
 // ---- classes ----
+app.get('/api/classes/version', requireAuth, (req, res) => res.json({ v: db.prepare('SELECT COALESCE(MAX(id),0) m FROM snapshots').get().m + ':' + db.prepare('SELECT COUNT(*) c, COALESCE(SUM(id),0) s FROM classes').get().c + ':' + db.prepare('SELECT COUNT(*) c FROM class_students').get().c }));
 app.get('/api/classes', requireAuth, (req, res) => {
   if (!isAdmin(req)) return res.json(allClasses('WHERE c.teacher_id=?', [req.user.id]));
   res.json(allClasses());
 });
 app.post('/api/classes/check', requirePerm('board'), (req, res) => res.json(findConflicts(req.body)));
 function saveClass(body, id) {
-  const { title = '', teacher_id = null, school_id = null, day, start, end, note = '', type = 'robotic' } = body;
+  const { title = '', teacher_id = null, school_id = null, day, start, end, note = '', type = 'robotic', color = null } = body;
   const student_ids = type === 'public' ? [] : (body.student_ids || []);
-  if (id) db.prepare('UPDATE classes SET title=?,teacher_id=?,school_id=?,day=?,start=?,end=?,note=?,type=? WHERE id=?').run(title, teacher_id, school_id, day, start, end, note, type, id);
-  else id = Number(db.prepare('INSERT INTO classes(title,teacher_id,school_id,day,start,end,note,type) VALUES (?,?,?,?,?,?,?,?)').run(title, teacher_id, school_id, day, start, end, note, type).lastInsertRowid);
+  if (id) db.prepare('UPDATE classes SET title=?,teacher_id=?,school_id=?,day=?,start=?,end=?,note=?,type=?,color=? WHERE id=?').run(title, teacher_id, school_id, day, start, end, note, type, color || null, id);
+  else id = Number(db.prepare('INSERT INTO classes(title,teacher_id,school_id,day,start,end,note,type,color) VALUES (?,?,?,?,?,?,?,?,?)').run(title, teacher_id, school_id, day, start, end, note, type, color || null).lastInsertRowid);
   db.prepare('DELETE FROM class_students WHERE class_id=?').run(id);
   const ins = db.prepare('INSERT OR IGNORE INTO class_students VALUES (?,?)');
   student_ids.forEach(s => ins.run(id, s));
@@ -424,7 +428,7 @@ app.post('/api/telegram/test', requirePerm('settings'), async (req, res) => {
   catch (e) { res.status(502).json({ error: 'سرور به تلگرام دسترسی ندارد: ' + e.message }); }
 });
 
-app.use(express.static(path.join(__dirname, 'public')));
+app.use(express.static(path.join(__dirname, 'public'), { etag: true, setHeaders: res => res.setHeader('Cache-Control', 'no-cache') }));
 app.get('/health', (req, res) => res.json({ ok: true }));
 app.use((err, req, res, next) => { console.error(err); res.status(500).json({ error: 'خطای سرور' }); });
 app.listen(PORT, '0.0.0.0', () => { console.log(`سرور روی http://localhost:${PORT} بالا آمد`); if (!process.env.NO_BOT) bot.poll(); });
