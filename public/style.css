@@ -316,3 +316,16 @@ input[type=color].colorbox{width:32px;height:32px}
 .jpick .jm-h{display:none}
 .cal td.holiday{background:#fff1f2}
 .cal .holname{font-size:10px;color:#b91c1c;font-weight:700;margin-bottom:3px}
+
+/* class modal header */
+.modal{padding:0;overflow:hidden}
+.modal>*:not(.mh){margin-left:24px;margin-right:24px}
+.modal>h2:first-child,.modal>div:first-child:not(.mh){margin-top:22px}
+.modal>.row:last-child,.modal>table:last-child,.modal>p:last-child,.modal>div:last-child{margin-bottom:22px}
+.mh{color:#fff;padding:22px 24px 18px;position:relative;overflow:hidden}
+.mh::before{content:'';position:absolute;inset:0;background:linear-gradient(160deg,rgba(255,255,255,.22),transparent 60%)}
+.mh>*{position:relative}
+.mh-t{font-size:22px;font-weight:900}
+.mh-s{font-size:13px;opacity:.95;margin-top:4px}
+.mh-chips{display:flex;flex-wrap:wrap;gap:6px;margin-top:10px}
+.mh-chips span{background:rgba(255,255,255,.25);padding:3px 10px;border-radius:999px;font-size:12px;font-weight:600;backdrop-filter:blur(4px)}

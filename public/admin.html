@@ -517,7 +517,13 @@ function openClass(id) {
   const c = classes.find(x => x.id === id); if (!c) return;
   M = { id, body: bodyOf(c) };
   const slot = `${c.start}-${c.end}`, custom = !meta.slots.includes(slot);
-  openModal(`<div class="row" style="justify-content:space-between"><h2 style="margin:0">ویرایش کلاس</h2><span class="chip">${meta.days[c.day]}</span></div>
+  openModal(`<div class="mh" style="background:${cardColor(c)}">
+      <div class="mh-t">${TYPE_ICON[c.type] || '🤖'} ${esc(c.teacher_name || 'بدون دبیر')}</div>
+      <div class="mh-s">${meta.days[c.day]} · ⏰ ${fa(c.start)} تا ${fa(c.end)}${c.school_name ? ' · 📍 ' + esc(c.school_name) : ''}${c.title ? ' · 🏷 ' + esc(c.title) : ''}</div>
+      <div class="mh-s">${TYPES[c.type] || ''}${needsStudents(c) ? ` · 🎒 ${fa(c.students.length)} دانش‌آموز` : ''}</div>
+      ${needsStudents(c) && c.students.length ? `<div class="mh-chips">${c.students.map(s => `<span>${esc(s.name)}</span>`).join('')}</div>` : ''}
+    </div>
+    <div class="row" style="justify-content:space-between;margin-top:14px"><h3 style="margin:0">ویرایش</h3><span class="muted" style="font-size:12px">تغییرات با «ذخیره» اعمال می‌شود</span></div>
     <div class="grid2" style="margin-top:14px">
       <div class="field"><label>دبیر</label><select id="m-teacher"><option value="">— بدون دبیر —</option>${teachers.map(t => `<option value="${t.id}" ${t.id === c.teacher_id ? 'selected' : ''}>${esc(t.name)}</option>`).join('')}</select></div>
       <div class="field"><label>محل برگزاری (تایپ کنید؛ اگر نبود ساخته می‌شود)</label><input id="m-school" list="m-school-list" value="${esc(c.school_name || '')}"><datalist id="m-school-list">${schools.map(s => `<option value="${esc(s.name)}">`).join('')}</datalist></div>
