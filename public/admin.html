@@ -41,7 +41,8 @@
           <button class="btn ghost" onclick="toggleFull()" title="تمام‌صفحه">⛶</button>
         </div>
       </div>
-      <div id="board-stats"><div class="row" style="margin-bottom:8px"><button class="btn" id="pool-btn" onclick="togglePool()">📚 لیست دبیر/دانش‌آموز</button></div><div class="stats mini" id="stats"></div></div>
+      <div class="row" style="margin-bottom:8px"><button class="btn sm" id="pool-btn" onclick="togglePool()">📚 لیست دبیر/دانش‌آموز</button></div>
+      <div id="board-stats"><div class="stats mini" id="stats"></div></div>
       <div id="filter-bar" class="filter-bar"></div>
       <div class="board">
         <div class="tt" id="tt"></div>
@@ -143,7 +144,7 @@
           <button class="btn" onclick="saveTerm()">ذخیره</button></div>
         <div class="card"><h3>🖥 نمایش تخته</h3>
           <label><input type="checkbox" id="ui-tools" style="width:auto" onchange="saveUI()"> نوار ابزار (جستجو، فیلتر دبیر/مدرسه، برگرد/تکرار، نسخه‌ها، تمام‌صفحه)</label>
-          <label><input type="checkbox" id="ui-stats" style="width:auto" onchange="saveUI()"> آمار و دکمه لیست دبیر/دانش‌آموز</label>
+          <label><input type="checkbox" id="ui-stats" style="width:auto" onchange="saveUI()"> آمار بالای تخته</label>
           <p class="muted" style="font-size:12px;margin-top:8px">میان‌برها همیشه کار می‌کنند: Ctrl+Z برگرد · Ctrl+Y تکرار · Ctrl+C کپی کلاس باز · Ctrl+X بریدن · Ctrl+V چسباندن در روزی که موس رویش است · F تمام‌صفحه · L لیست</p></div>
         <div class="card" id="colors-card" style="grid-column:1/-1"><h3>🎨 رنگ‌ها</h3>
           <p class="muted" style="font-size:12px">هر تغییر همان لحظه ذخیره می‌شود. رنگ کلاس (ستون سوم) بر رنگ دبیر و محل اولویت دارد؛ با ↺ به پیش‌فرض برمی‌گردد.</p>
@@ -941,7 +942,7 @@ async function saveTg() { const b = { tg_bot_username: $('#tg-bot').value.trim()
   for (const n of ['1', '2']) { b[`tg_relay${n}_url`] = $(`#r${n}-url`).value.trim(); b[`tg_relay${n}_ip`] = $(`#r${n}-ip`).value.trim(); b[`tg_relay${n}_insecure`] = $(`#r${n}-insecure`).value; b[`tg_relay${n}_enabled`] = $(`#r${n}-en`).checked ? '1' : '0'; if ($(`#r${n}-secret`).value.trim()) b[`tg_relay${n}_secret`] = $(`#r${n}-secret`).value.trim(); } await api('/api/telegram/settings', 'PUT', b); $('#tg-token').value = ''; toast('ذخیره شد', 'ok'); loadTg(); }
 async function testTg() { try { const r = await api('/api/telegram/test', 'POST'); toast(r.ok ? `✅ متصل: @${r.result.username}` : '❌ ' + (r.description || 'خطا'), r.ok ? 'ok' : 'bad'); } catch (e) { toast(e.message, 'bad'); } }
 const UI = () => { try { return JSON.parse(localStorage.getItem('boardUI') || '{}'); } catch { return {}; } };
-function applyUI() { const u = UI(); $('#board-tools').style.display = u.tools ? '' : 'none'; $('#board-stats').style.display = u.stats ? '' : 'none'; if (!u.stats) togglePool(false); const a = $('#ui-tools'), b = $('#ui-stats'); if (a) { a.checked = !!u.tools; b.checked = !!u.stats; } }
+function applyUI() { const u = UI(); $('#board-tools').style.display = u.tools ? '' : 'none'; $('#board-stats').style.display = u.stats ? '' : 'none'; const a = $('#ui-tools'), b = $('#ui-stats'); if (a) { a.checked = !!u.tools; b.checked = !!u.stats; } }
 function saveUI() { try { localStorage.setItem('boardUI', JSON.stringify({ tools: $('#ui-tools').checked, stats: $('#ui-stats').checked })); } catch {} applyUI(); }
 document.addEventListener('DOMContentLoaded', applyUI);
 // clipboard + keyboard
