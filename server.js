@@ -426,7 +426,7 @@ app.put('/api/telegram/settings', requireMain, (req, res) => {
   res.json({ ok: true });
 });
 app.post('/api/telegram/test', requirePerm('settings'), async (req, res) => {
-  try { await bot.ping(); res.json({ ok: true, result: { username: setting('tg_bot_username', 'hamraheteam_bot') } }); }
+  try { const st = bot.status(); if (!st.token) throw new Error('توکن ثبت نشده'); if (st.lastError) throw new Error(st.lastError); if (!st.polling) throw new Error('ربات فعال نیست'); res.json({ ok: true, result: { username: setting('tg_bot_username', 'hamraheteam_bot') } }); }
   catch (e) { res.status(502).json({ error: 'سرور به تلگرام دسترسی ندارد: ' + e.message }); }
 });
 
