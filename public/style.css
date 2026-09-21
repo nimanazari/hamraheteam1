@@ -463,3 +463,17 @@ body.fs .board{grid-template-columns:minmax(0,1fr) 260px}
 .crow input[type=color]{width:34px;height:26px;padding:1px;border-radius:7px;border:1px solid var(--line);cursor:pointer;flex:0 0 auto}
 .crow .x{margin-right:auto;cursor:pointer;color:var(--muted)}.crow .x:hover{color:var(--bad)}
 #colors-body h4{margin:0 0 6px;font-size:12px}
+
+/* fullscreen: only the week grid */
+#v-board:fullscreen .topbar,#v-board:fullscreen .stats,#v-board:fullscreen .filter-bar,#v-board:fullscreen .pool-panel,#v-board:fullscreen #pick-bar{display:none!important}
+#v-board:fullscreen{padding:10px 14px}
+#v-board:fullscreen .board{grid-template-columns:minmax(0,1fr)!important;gap:0}
+#v-board:fullscreen .tt{grid-template-columns:60px repeat(7,minmax(0,1fr));gap:8px}
+#v-board:fullscreen .tt .col,#v-board:fullscreen .tt .axis{min-height:calc(100vh - 30px)!important;height:calc(100vh - 30px)}
+#v-board:fullscreen .tt .col h4{font-size:16px;padding:8px}
+#v-board:fullscreen .tt .col h4 .hb{display:none}
+#v-board:fullscreen .tt .hr{font-size:13px}
+#v-board:fullscreen .cls .t{font-size:17px}
+#v-board:fullscreen .cls .s{font-size:13px}
+#v-board:fullscreen .cls{padding:8px 10px}
+#v-week:fullscreen .row{display:none}
