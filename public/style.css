@@ -477,3 +477,6 @@ body.fs .board{grid-template-columns:minmax(0,1fr) 260px}
 #v-board:fullscreen .cls .s{font-size:13px}
 #v-board:fullscreen .cls{padding:8px 10px}
 #v-week:fullscreen .row{display:none}
+
+#board-tools{margin-bottom:8px}
+#v-board:fullscreen #board-tools,#v-board:fullscreen #board-stats{display:none!important}

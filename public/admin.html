@@ -30,8 +30,7 @@
 
     <!-- ========== BOARD ========== -->
     <section class="view active" id="v-board">
-      <div class="topbar">
-        <h2>تخته هفتگی</h2>
+      <div class="topbar" id="board-tools">
         <div class="row">
           <input id="f-q" placeholder="🔎 جستجو: دانش‌آموز، دبیر، محل" style="width:210px">
           <select id="f-teacher" style="width:150px"><option value="">همه دبیران</option></select>
@@ -40,10 +39,9 @@
           <button class="btn ghost" id="btn-redo" onclick="redo()" title="تکرار (Ctrl+Y)">↷ تکرار</button>
           <button class="btn ghost" onclick="openHistory()">🕘 نسخه‌ها</button>
           <button class="btn ghost" onclick="toggleFull()" title="تمام‌صفحه">⛶</button>
-          <button class="btn" id="pool-btn" onclick="togglePool()">📚 لیست دبیر/دانش‌آموز</button>
         </div>
       </div>
-      <div class="stats mini" id="stats"></div>
+      <div id="board-stats"><div class="row" style="margin-bottom:8px"><button class="btn" id="pool-btn" onclick="togglePool()">📚 لیست دبیر/دانش‌آموز</button></div><div class="stats mini" id="stats"></div></div>
       <div id="filter-bar" class="filter-bar"></div>
       <div class="board">
         <div class="tt" id="tt"></div>
@@ -143,6 +141,10 @@
           <div class="grid2"><div class="field"><label>شروع محور ساعت تخته</label><input type="time" id="set-g0"></div><div class="field"><label>پایان محور ساعت</label><input type="time" id="set-g1"></div></div>
           <div class="field"><label>مبنای رنگ کلاس‌ها</label><select id="set-cmode"><option value="teacher">رنگ دبیر</option><option value="school">رنگ محل برگزاری</option></select></div>
           <button class="btn" onclick="saveTerm()">ذخیره</button></div>
+        <div class="card"><h3>🖥 نمایش تخته</h3>
+          <label><input type="checkbox" id="ui-tools" style="width:auto" onchange="saveUI()"> نوار ابزار (جستجو، فیلتر دبیر/مدرسه، برگرد/تکرار، نسخه‌ها، تمام‌صفحه)</label>
+          <label><input type="checkbox" id="ui-stats" style="width:auto" onchange="saveUI()"> آمار و دکمه لیست دبیر/دانش‌آموز</label>
+          <p class="muted" style="font-size:12px;margin-top:8px">میان‌برها همیشه کار می‌کنند: Ctrl+Z برگرد · Ctrl+Y تکرار · Ctrl+C کپی کلاس باز · Ctrl+X بریدن · Ctrl+V چسباندن در روزی که موس رویش است · F تمام‌صفحه · L لیست</p></div>
         <div class="card" id="colors-card" style="grid-column:1/-1"><h3>🎨 رنگ‌ها</h3>
           <p class="muted" style="font-size:12px">هر تغییر همان لحظه ذخیره می‌شود. رنگ کلاس (ستون سوم) بر رنگ دبیر و محل اولویت دارد؛ با ↺ به پیش‌فرض برمی‌گردد.</p>
           <div class="grid3" id="colors-body"></div></div>
@@ -938,6 +940,20 @@ async function loadTg() {
 async function saveTg() { const b = { tg_bot_username: $('#tg-bot').value.trim(), tg_admin: $('#tg-admin').value.trim().replace('@', ''), tg_api_base: $('#tg-base').value.trim() }; if ($('#tg-token').value.trim()) b.tg_token = $('#tg-token').value.trim();
   for (const n of ['1', '2']) { b[`tg_relay${n}_url`] = $(`#r${n}-url`).value.trim(); b[`tg_relay${n}_ip`] = $(`#r${n}-ip`).value.trim(); b[`tg_relay${n}_insecure`] = $(`#r${n}-insecure`).value; b[`tg_relay${n}_enabled`] = $(`#r${n}-en`).checked ? '1' : '0'; if ($(`#r${n}-secret`).value.trim()) b[`tg_relay${n}_secret`] = $(`#r${n}-secret`).value.trim(); } await api('/api/telegram/settings', 'PUT', b); $('#tg-token').value = ''; toast('ذخیره شد', 'ok'); loadTg(); }
 async function testTg() { try { const r = await api('/api/telegram/test', 'POST'); toast(r.ok ? `✅ متصل: @${r.result.username}` : '❌ ' + (r.description || 'خطا'), r.ok ? 'ok' : 'bad'); } catch (e) { toast(e.message, 'bad'); } }
+const UI = () => { try { return JSON.parse(localStorage.getItem('boardUI') || '{}'); } catch { return {}; } };
+function applyUI() { const u = UI(); $('#board-tools').style.display = u.tools ? '' : 'none'; $('#board-stats').style.display = u.stats ? '' : 'none'; if (!u.stats) togglePool(false); const a = $('#ui-tools'), b = $('#ui-stats'); if (a) { a.checked = !!u.tools; b.checked = !!u.stats; } }
+function saveUI() { try { localStorage.setItem('boardUI', JSON.stringify({ tools: $('#ui-tools').checked, stats: $('#ui-stats').checked })); } catch {} applyUI(); }
+document.addEventListener('DOMContentLoaded', applyUI);
+// clipboard + keyboard
+let CLIP = null, hoverDay = null;
+document.addEventListener('mouseover', e => { const col = e.target.closest?.('.drop-day'); if (col) hoverDay = +col.dataset.day; });
+document.addEventListener('keydown', async e => {
+  if (e.target.matches('input,textarea,select') || $('#overlay').classList.contains('show')) return;
+  const open = $('.cls.open'); const k = e.key.toLowerCase();
+  if ((e.ctrlKey || e.metaKey) && (k === 'c' || k === 'x') && open) { e.preventDefault(); const c = classes.find(x => x.id === +open.dataset.cls); CLIP = bodyOf(c); toast(k === 'c' ? 'کپی شد؛ روی روز مقصد Ctrl+V' : 'بریده شد؛ روی روز مقصد Ctrl+V'); if (k === 'x') { await api('/api/classes/' + c.id, 'DELETE'); reloadClasses(); } }
+  else if ((e.ctrlKey || e.metaKey) && k === 'v' && CLIP) { e.preventDefault(); if (hoverDay == null) return toast('موس را روی روز مقصد ببرید و Ctrl+V بزنید', 'bad'); try { await saveWithConfirm({ ...CLIP, day: hoverDay }); toast('چسبانده شد در ' + meta.days[hoverDay], 'ok'); reloadClasses(); } catch (err) { if (err.message !== 'cancel') toast(err.message, 'bad'); } }
+  else if (!e.ctrlKey && !e.metaKey && !e.altKey && $('#v-board').classList.contains('active')) { if (k === 'f') { e.preventDefault(); toggleFull(); } if (k === 'l') { e.preventDefault(); togglePool(); } }
+});
 function renderColors() {
   const box = $('#colors-body'); if (!box) return;
   const row = (label, color, onch, extra = '') => `<div class="crow"><input type="color" value="${color}" onchange="${onch}"><span>${label}</span>${extra}</div>`;
