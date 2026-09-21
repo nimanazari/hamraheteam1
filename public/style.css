@@ -421,14 +421,10 @@ body.fs .board{grid-template-columns:minmax(0,1fr) 260px}
 .board .cls .t .chip-in{display:inline;padding:0;margin:0;background:none;white-space:normal;max-width:none;overflow:visible}
 .board .cls .s{font-size:11px;white-space:normal;overflow:visible;text-overflow:clip;line-height:1.35}
 .board .cls .s.edit-line{white-space:normal}
-.board .cls:hover{z-index:20;min-width:170px;height:auto!important;min-height:120px!important;box-shadow:0 12px 30px rgba(0,0,0,.35);transform:none}
-.board .cls.tiny:hover .s.edit-line[data-edit=type],.board .cls.tiny:hover .s.edit-line[data-edit=title],.board .cls.tiny:hover details,.board .cls.tiny:hover .warn-tag{display:block}
 .board .tt .col{min-height:calc(100vh - 250px)}
 .board .tt .col h4{font-size:12.5px}
 
 /* click-to-expand cards (no hover jumping) */
-.board .cls:hover{z-index:auto;min-width:0;height:inherit;min-height:0!important;box-shadow:0 2px 8px rgba(0,0,0,.14);transform:none}
-.board .cls.tiny:hover .s.edit-line[data-edit=type],.board .cls.tiny:hover .s.edit-line[data-edit=title],.board .cls.tiny:hover details,.board .cls.tiny:hover .warn-tag{display:none}
 .board .cls .open-only{display:none}
 .board .cls.open{z-index:30;min-width:200px;width:auto!important;height:auto!important;min-height:150px!important;box-shadow:0 14px 36px rgba(0,0,0,.4);outline:3px solid #fff;transition:.15s}
 .board .cls.open .s.edit-line,.board .cls.open details,.board .cls.open .warn-tag,.board .cls.open .open-only{display:block}
@@ -456,3 +452,8 @@ body.fs .board{grid-template-columns:minmax(0,1fr) 260px}
 .board .cls.open .handles span{background:rgba(255,255,255,.28);padding:3px 9px;border-radius:8px;font-size:11px;font-weight:800;cursor:ns-resize;user-select:none}
 .board .cls.open .handles span:hover{background:rgba(255,255,255,.45)}
 .board .cls.dragging-time{opacity:.85;outline:3px dashed #fff;transition:none}
+
+/* no hover effects on time-grid cards */
+.board .cls:hover{transform:none;box-shadow:0 2px 8px rgba(0,0,0,.14)}
+.board .cls .s.edit-line[data-edit=slot]{display:none}
+.board .cls.open .s.edit-line[data-edit=slot]{display:block}
