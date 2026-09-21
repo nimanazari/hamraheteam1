@@ -409,3 +409,19 @@ body.fs .board{grid-template-columns:minmax(0,1fr) 260px}
 :root[data-theme=dark] .tg-h span,:root[data-theme=dark] .filter-bar{color:var(--ink)}
 
 .board .tt .col{min-height:calc(100vh - 290px)}
+
+/* readable time-grid cards */
+.board{grid-template-columns:minmax(0,1fr)}
+.board .pool-panel{display:none}
+.board.pool-open{grid-template-columns:minmax(0,1fr) 240px}
+.board.pool-open .pool-panel{display:block}
+.board .tt{grid-template-columns:40px repeat(7,minmax(0,1fr));gap:5px}
+.board .cls{padding:6px 7px}
+.board .cls .t{font-size:13.5px;font-weight:900;line-height:1.3;white-space:normal;overflow:visible;text-overflow:clip;display:block;text-shadow:0 1px 2px rgba(0,0,0,.25)}
+.board .cls .t .chip-in{display:inline;padding:0;margin:0;background:none;white-space:normal;max-width:none;overflow:visible}
+.board .cls .s{font-size:11px;white-space:normal;overflow:visible;text-overflow:clip;line-height:1.35}
+.board .cls .s.edit-line{white-space:normal}
+.board .cls:hover{z-index:20;min-width:170px;height:auto!important;min-height:120px!important;box-shadow:0 12px 30px rgba(0,0,0,.35);transform:none}
+.board .cls.tiny:hover .s.edit-line[data-edit=type],.board .cls.tiny:hover .s.edit-line[data-edit=title],.board .cls.tiny:hover details,.board .cls.tiny:hover .warn-tag{display:block}
+.board .tt .col{min-height:calc(100vh - 250px)}
+.board .tt .col h4{font-size:12.5px}

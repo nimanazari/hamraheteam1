@@ -40,6 +40,7 @@
           <button class="btn ghost" id="btn-redo" onclick="redo()" title="تکرار (Ctrl+Y)">↷ تکرار</button>
           <button class="btn ghost" onclick="openHistory()">🕘 نسخه‌ها</button>
           <button class="btn ghost" onclick="toggleFull()" title="تمام‌صفحه">⛶</button>
+          <button class="btn" id="pool-btn" onclick="togglePool()">📚 لیست دبیر/دانش‌آموز</button>
         </div>
       </div>
       <div class="stats mini" id="stats"></div>
@@ -239,7 +240,7 @@ function renderBoard() {
       const top = (st - g0) / span * 100, h = (en - st) / span * 100, w = 100 / cl.n, left = k * w;
       const warn = cardWarn(c), mins = en - st;
       return `<div class="cls drop-cls ${warn ? 'warn' : ''} ${mins < 90 ? 'tiny' : ''}" draggable="true" data-cls="${c.id}" style="background:${cardColor(c)};top:${top.toFixed(3)}%;height:${h.toFixed(3)}%;right:${left.toFixed(3)}%;width:calc(${w.toFixed(3)}% - 3px)" title="${esc(c.teacher_name || '')} · ${fa(c.start)}–${fa(c.end)} · ${esc(c.school_name || '')}${warn ? ' · ⚠️ ' + warn : ''}">
-        <div class="t"><span class="tl"></span>${c.teacher_id ? `<span class="chip-in" draggable="true" data-type="teacher" data-id="${c.teacher_id}" data-from="${c.id}" title="بکشید تا از کلاس خارج شود">${esc(c.teacher_name)}</span>` : '<span class="faint">بدون دبیر</span>'}</div>
+        <div class="t"${c.teacher_id ? '' : ''}>${c.teacher_id ? `<span class="chip-in" draggable="true" data-type="teacher" data-id="${c.teacher_id}" data-from="${c.id}" title="بکشید تا از کلاس خارج شود">${esc(c.teacher_name)}</span>` : '<span class="faint">بدون دبیر</span>'}</div>
         <div class="s edit-line" data-edit="slot" data-cls="${c.id}" title="کلیک: تغییر ساعت">⏰ ${fa(c.start)}–${fa(c.end)}</div>
         <div class="s edit-line" data-edit="school" data-cls="${c.id}" title="کلیک: محل برگزاری">📍 ${c.school_name ? esc(c.school_name) : '<span class="faint">محل؟</span>'}</div>
         ${c.type === 'robotic' ? `<div class="s edit-line" data-edit="title" data-cls="${c.id}" title="کلیک: نام کلاس رباتیک">🏷 ${c.title ? esc(c.title) : '<span class="faint">نام کلاس</span>'}</div>` : ''}
@@ -539,6 +540,8 @@ async function setTime(id, start, end) {
   try { await saveWithConfirm(body, id); await reloadClasses(); } catch (e) { renderBoard(); if (e.message !== 'cancel') toast(e.message, 'bad'); }
 }
 async function setClassColor(id, color) { const c = classes.find(x => x.id === id); const body = bodyOf(c); body.color = color; await api('/api/classes/' + id, 'PUT', { ...body, force: true }); reloadClasses(); }
+function togglePool(force) { const b = $('.board'); const open = force ?? !b.classList.contains('pool-open'); b.classList.toggle('pool-open', open); $('#pool-btn').classList.toggle('ghost', open); try { localStorage.setItem('poolOpen', open ? '1' : '0'); } catch {} }
+document.addEventListener('DOMContentLoaded', () => { try { togglePool(localStorage.getItem('poolOpen') === '1'); } catch { togglePool(false); } });
 function toggleFull() { const el = $('#v-board'); if (document.fullscreenElement) document.exitFullscreen(); else el.requestFullscreen?.(); }
 document.addEventListener('fullscreenchange', () => document.body.classList.toggle('fs', !!document.fullscreenElement));
 async function undo() { try { const r = await api('/api/undo', 'POST'); toast('برگشت: ' + r.label, 'ok'); reloadClasses(); } catch (e) { toast(e.message, 'bad'); } }
