@@ -31,14 +31,15 @@
       <div class="topbar">
         <h2>تخته هفتگی</h2>
         <div class="row">
-          <select id="f-teacher" style="width:160px"><option value="">همه دبیران</option></select>
+          <input id="f-q" placeholder="🔎 جستجو: دانش‌آموز، دبیر، محل" style="width:210px">
+          <select id="f-teacher" style="width:150px"><option value="">همه دبیران</option></select>
           <select id="f-school" style="width:160px"><option value="">همه محل‌ها</option></select>
           <button class="btn ghost" id="btn-undo" onclick="undo()" title="برگرداندن آخرین تغییر (Ctrl+Z)">↶ برگرد</button>
           <button class="btn ghost" id="btn-redo" onclick="redo()" title="تکرار (Ctrl+Y)">↷ تکرار</button>
           <button class="btn ghost" onclick="openHistory()">🕘 نسخه‌ها</button>
         </div>
       </div>
-      <div class="stats" id="stats"></div>
+      <div class="stats mini" id="stats"></div>
       <div id="filter-bar" class="filter-bar"></div>
       <div class="board">
         <div class="tt" id="tt"></div>
@@ -188,14 +189,15 @@ const clsLabel = c => c.teacher_name ? c.teacher_name + (c.title ? ' · ' + c.ti
 
 /* ================= BOARD ================= */
 function renderBoard() {
-  const ft = +$('#f-teacher').value, fs = +$('#f-school').value, td = todayDayIndex();
-  $('#filter-bar').innerHTML = (ft || fs) ? `🔎 فقط ${ft ? 'دبیر <b>' + esc(teacherById(ft)?.name || '') + '</b>' : ''} ${fs ? 'محل <b>' + esc(schoolName(fs)) + '</b>' : ''} نمایش داده می‌شود <button class="btn ghost sm" onclick="$('#f-teacher').value='';$('#f-school').value='';renderBoard()">✕ نمایش همه</button>` : '';
+  const ft = +$('#f-teacher').value, fs = +$('#f-school').value, td = todayDayIndex(), fq = $('#f-q').value.trim();
+  const matchQ = c => !fq || (c.teacher_name || '').includes(fq) || (c.school_name || '').includes(fq) || (c.title || '').includes(fq) || c.students.some(s => s.name.includes(fq));
+  $('#filter-bar').innerHTML = (ft || fs || fq) ? `🔎 فقط ${fq ? 'موارد شامل «<b>' + esc(fq) + '</b>»' : ''} ${ft ? 'دبیر <b>' + esc(teacherById(ft)?.name || '') + '</b>' : ''} ${fs ? 'محل <b>' + esc(schoolName(fs)) + '</b>' : ''} نمایش داده می‌شود <button class="btn ghost sm" onclick="$('#f-teacher').value='';$('#f-school').value='';$('#f-q').value='';renderBoard()">✕ نمایش همه</button>` : '';
   $('#stats').innerHTML = [['📚', classes.length, 'کلاس در هفته'], ['👩‍🏫', teachers.length, 'دبیر'], ['🎒', students.filter(s => s.active).length, 'دانش‌آموز فعال'], ['🏫', schools.length, 'مدرسه']].map(([i, n, l]) => `<div class="stat"><i>${i}</i><div><b>${fa(n)}</b><span>${l}</span></div></div>`).join('');
   $('#tt').innerHTML = meta.days.map((d, i) => {
-    const list = classes.filter(c => c.day === i && !((ft && c.teacher_id !== ft) || (fs && c.school_id !== fs))).sort((a, b) => a.start.localeCompare(b.start) || a.end.localeCompare(b.end));
+    const list = classes.filter(c => c.day === i && matchQ(c) && !((ft && c.teacher_id !== ft) || (fs && c.school_id !== fs))).sort((a, b) => a.start.localeCompare(b.start) || a.end.localeCompare(b.end));
     const groups = []; list.forEach(c => { const k = c.start + '-' + c.end; let g = groups.find(x => x.k === k); if (!g) groups.push(g = { k, start: c.start, end: c.end, items: [] }); g.items.push(c); });
     return `<div class="col drop-day ${i === td ? 'today' : ''} ${i >= 5 ? 'office' : ''}" data-day="${i}"><h4><span class="hb" title="کلاس جدید در ${d}" onclick="event.stopPropagation();newOnDay(${i})">＋</span>${d}<span class="hb" title="عملیات روی کل روز" onclick="event.stopPropagation();dayMenu(${i})">⋯</span></h4>${groups.map(g => `<div class="tgrp ${g.items.length > 1 ? 'multi' : ''}"><div class="tg-h">⏰ ${fa(g.start)} تا ${fa(g.end)}${g.items.length > 1 ? ` <span>${fa(g.items.length)} کلاس همزمان</span>` : ''}</div>${g.items.map(c => {
-      const hide = (ft && c.teacher_id !== ft) || (fs && c.school_id !== fs);
+      const hide = !matchQ(c) || (ft && c.teacher_id !== ft) || (fs && c.school_id !== fs);
       if (hide) return '';
       const warn = cardWarn(c);
       const mins = Math.max(0, (+c.end.slice(0, 2) * 60 + +c.end.slice(3)) - (+c.start.slice(0, 2) * 60 + +c.start.slice(3)));
@@ -204,7 +206,7 @@ function renderBoard() {
         <div class="s edit-line" data-edit="school" data-cls="${c.id}" title="کلیک: محل برگزاری">📍 ${c.school_name ? esc(c.school_name) : '<span class="faint">محل؟</span>'}</div>
         ${c.type === 'robotic' ? `<div class="s edit-line" data-edit="title" data-cls="${c.id}" title="کلیک: نام کلاس رباتیک">🏷 ${c.title ? esc(c.title) : '<span class="faint">نام کلاس</span>'}</div>` : ''}
         <div class="s edit-line" data-edit="type" data-cls="${c.id}" title="کلیک: نوع کلاس">${TYPE_ICON[c.type] || '🤖'} ${TYPES[c.type] || 'رباتیک'}</div>
-        <div class="s time-row" onclick="event.stopPropagation()" onmousedown="event.stopPropagation()">⏰ <input type="time" value="${c.start}" step="300" onchange="setTime(${c.id}, this.value, null)"><span>تا</span><input type="time" value="${c.end}" step="300" onchange="setTime(${c.id}, null, this.value)"></div>
+        <div class="s edit-line" data-edit="slot" data-cls="${c.id}" title="کلیک: تغییر ساعت">⏰ ${fa(c.start)}–${fa(c.end)}</div>
         <label class="color-line" title="رنگ این کلاس"><input type="color" value="${cardColor(c)}" onclick="event.stopPropagation()" onmousedown="event.stopPropagation()" onchange="setClassColor(${c.id}, this.value)">${c.color ? `<span class="x" onclick="event.stopPropagation();setClassColor(${c.id}, null)" title="برگشت به رنگ پیش‌فرض">↺</span>` : ''}</label>
         ${needsStudents(c) ? `<details class="n" ${c.students.length <= 3 ? 'open' : ''} onclick="event.stopPropagation()"><summary>🎒 ${fa(c.students.length)} دانش‌آموز</summary><div class="n">${c.students.map(s => `<span class="mini chip-in" draggable="true" data-type="student" data-id="${s.id}" data-from="${c.id}" title="${esc(s.name)} — بکشید تا خارج شود">${esc(s.name)}</span>`).join('')}</div></details>` : ''}
         ${warn ? `<div class="warn-tag">⚠️ ${warn}</div>` : ''}
@@ -213,7 +215,7 @@ function renderBoard() {
   }).join('');
   bindDrops();
 }
-['#f-teacher', '#f-school'].forEach(s => $(s).onchange = renderBoard);
+['#f-teacher', '#f-school'].forEach(s => $(s).onchange = renderBoard); $('#f-q').oninput = renderBoard;
 
 function renderPool() {
   const q = $('#pool-q').value.trim(), sch = +$('#pool-school').value;
@@ -538,7 +540,8 @@ function openClass(id) {
     <div class="dropzone" id="m-members" style="min-height:70px;padding:10px"></div>
     <div class="row" style="margin-top:8px"><input id="m-add" list="m-list" placeholder="افزودن دانش‌آموز: نام را بنویسید و Enter بزنید" class="grow"><datalist id="m-list">${students.map(s => `<option value="${esc(s.name)}">`).join('')}</datalist></div>
     <div class="row" style="margin-top:18px;justify-content:space-between">
-      <button class="btn danger sm" onclick="delClass(${id})">حذف کلاس</button>
+      <button class="btn danger sm" onclick="delClass(${id})">🗑 حذف کلاس</button>
+      <select id="m-copy" class="btn ghost sm" style="width:auto" onchange="if(this.value!==''){copyClass(${id},+this.value);this.value=''}"><option value="">📋 کپی به روز...</option>${meta.days.map((d, i) => `<option value="${i}">${d}</option>`).join('')}</select>
       <span class="grow"></span>
       <button class="btn ghost" onclick="closeModal()">انصراف</button>
       <button class="btn" onclick="saveModal()">ذخیره</button>
@@ -558,6 +561,9 @@ async function saveModal() {
   if (!b.start || !b.end || b.start >= b.end) return toast('بازه زمانی نامعتبر است', 'bad');
   try { await saveWithConfirm(b, M.id); closeModal(); toast('ذخیره شد ✅', 'ok'); reloadClasses(); }
   catch (e) { if (e.message !== 'cancel') toast(e.message, 'bad'); }
+}
+async function copyClass(id, day) {
+  try { await api('/api/classes/bulk', 'POST', { action: 'copy', ids: [id], to_day: day }); closeModal(); toast('کپی شد به ' + meta.days[day], 'ok'); reloadClasses(); } catch (e) { toast(e.message, 'bad'); }
 }
 async function delClass(id) {
   if (!confirm('این کلاس حذف شود؟')) return;
