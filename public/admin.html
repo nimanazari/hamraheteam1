@@ -11,6 +11,7 @@
     <div class="brand"><i>📅</i>برنامه هفتگی</div>
     <div class="nav active" data-v="board">🧩 تخته هفتگی</div>
     <div class="nav" data-v="calendar">🗓 تقویم ترم</div>
+    <div class="nav" data-v="months">📆 تقویم کلی و تعطیلات</div>
     <div class="nav" data-v="teachers">👩‍🏫 دبیران</div>
     <div class="nav" data-v="students">🎒 دانش‌آموزان</div>
     <div class="nav" data-v="schools">🏫 مدارس</div>
@@ -66,6 +67,20 @@
       </div>
       <div class="cal-wrap"><table class="cal" id="cal"></table></div>
       <p class="muted" style="font-size:12px;margin-top:8px">روی هر کلاس در تقویم کلیک کنید تا آن جلسه را لغو کنید یا یادداشت بگذارید. جلسه‌های لغوشده خط‌خورده نمایش داده می‌شوند.</p>
+    </section>
+
+    <!-- ========== MONTHS (full calendar + holidays) ========== -->
+    <section class="view" id="v-months">
+      <div class="topbar"><h2>تقویم کلی</h2>
+        <div class="row">
+          <select id="mo-pick" style="width:190px"><option value="">انتخاب گروهی...</option><option value="0">همه شنبه‌ها</option><option value="1">همه یکشنبه‌ها</option><option value="2">همه دوشنبه‌ها</option><option value="3">همه سه‌شنبه‌ها</option><option value="4">همه چهارشنبه‌ها</option><option value="5">همه پنجشنبه‌ها</option><option value="6">همه جمعه‌ها</option><option value="h">روزهای مناسبت رسمی</option></select>
+          <button class="btn ghost sm" onclick="moSel.clear();renderMonths()">✕ لغو انتخاب</button>
+          <button class="btn sm" onclick="moHoliday(true)">🚫 تعطیل کردن انتخاب‌شده‌ها</button>
+          <button class="btn ghost sm" onclick="moHoliday(false)">✅ برگرداندن به روز عادی</button>
+        </div>
+      </div>
+      <p class="muted" style="font-size:12px;margin-top:-10px">روی هر روز کلیک کنید تا انتخاب شود (چند روز با هم). روز تعطیل یعنی همه کلاس‌های آن روز برگزار نمی‌شود و در پرونده دبیر و تقویم ترم خط می‌خورد. مناسبت‌های قمری تقریبی هستند؛ اگر یک روز اختلاف داشت همین‌جا اصلاح کنید. <span id="mo-count"></span></p>
+      <div class="months" id="months"></div>
     </section>
 
     <!-- ========== TEACHERS ========== -->
@@ -140,6 +155,7 @@
 <div id="overlay" class="overlay"></div>
 <div id="drawer" class="drawer"><div class="drawer-in" id="drawer-in"></div></div>
 <script src="/common.js"></script>
+<script src="/cal.js"></script>
 <script>
 let meta, teachers = [], students = [], schools = [], classes = [], overrides = [];
 let poolTab = 'teachers';
@@ -151,7 +167,7 @@ const cardWarn = c => c.type === 'public' ? (!c.school_id ? 'مدرسه را ا�
 let picked = null; // {type, id} for tap-to-place on touch devices
 const TOUCH = matchMedia('(pointer: coarse)').matches;
 
-const nav = v => { $$('.nav[data-v]').forEach(n => n.classList.toggle('active', n.dataset.v === v)); $$('.view').forEach(s => s.classList.toggle('active', s.id === 'v-' + v)); if (v === 'plans') loadPlans(); if (v === 'payroll') loadPayroll(); if (v === 'settings') loadTg(); if (v === 'reports') { loadReports(); localStorage.setItem('seenRep', window._maxRep || 0); $('#rep-badge').style.display = 'none'; } if (v === 'calendar') renderCal(); };
+const nav = v => { $$('.nav[data-v]').forEach(n => n.classList.toggle('active', n.dataset.v === v)); $$('.view').forEach(s => s.classList.toggle('active', s.id === 'v-' + v)); if (v === 'plans') loadPlans(); if (v === 'payroll') loadPayroll(); if (v === 'settings') loadTg(); if (v === 'reports') { loadReports(); localStorage.setItem('seenRep', window._maxRep || 0); $('#rep-badge').style.display = 'none'; } if (v === 'calendar') renderCal(); if (v === 'months') renderMonths(); };
 $$('.nav[data-v]').forEach(n => n.onclick = () => nav(n.dataset.v));
 
 async function loadAll() {
@@ -183,14 +199,14 @@ function renderBoard() {
       if (hide) return '';
       const warn = cardWarn(c);
       const mins = Math.max(0, (+c.end.slice(0, 2) * 60 + +c.end.slice(3)) - (+c.start.slice(0, 2) * 60 + +c.start.slice(3)));
-      return `<div class="cls drop-cls ${warn ? 'warn' : ''}" draggable="true" data-cls="${c.id}" style="background:${cardColor(c)};min-height:${Math.round(100 + mins * 0.5)}px" title="${esc(c.note)}">
-        <div class="t">${c.teacher_id ? `<span class="chip-in" draggable="true" data-type="teacher" data-id="${c.teacher_id}" data-from="${c.id}" title="بکشید تا از کلاس خارج شود">👤 ${esc(c.teacher_name)}</span>` : '<span class="faint">👤 بدون دبیر</span>'}</div>
-        <div class="s edit-line" data-edit="school" data-cls="${c.id}" title="کلیک: انتخاب محل برگزاری">📍 ${c.school_name ? esc(c.school_name) : '<span class="faint">محل برگزاری؟</span>'}</div>
-        <div class="s edit-line" data-edit="title" data-cls="${c.id}" title="کلیک: نام کلاس">🏷 ${c.title ? esc(c.title) : '<span class="faint">نام کلاس (دلخواه)</span>'}</div>
+      return `<div class="cls drop-cls ${warn ? 'warn' : ''}" draggable="true" data-cls="${c.id}" style="background:${cardColor(c)};min-height:${Math.round(60 + mins * 0.25)}px" title="${esc(c.note)}">
+        <div class="t"><span class="tl"></span>${c.teacher_id ? `<span class="chip-in" draggable="true" data-type="teacher" data-id="${c.teacher_id}" data-from="${c.id}" title="بکشید تا از کلاس خارج شود">👤 ${esc(c.teacher_name)}</span>` : '<span class="faint">👤 بدون دبیر</span>'}</div>
+        <div class="s edit-line" data-edit="school" data-cls="${c.id}" title="کلیک: محل برگزاری">📍 ${c.school_name ? esc(c.school_name) : '<span class="faint">محل؟</span>'}</div>
+        ${c.type === 'robotic' ? `<div class="s edit-line" data-edit="title" data-cls="${c.id}" title="کلیک: نام کلاس رباتیک">🏷 ${c.title ? esc(c.title) : '<span class="faint">نام کلاس</span>'}</div>` : ''}
         <div class="s edit-line" data-edit="type" data-cls="${c.id}" title="کلیک: نوع کلاس">${TYPE_ICON[c.type] || '🤖'} ${TYPES[c.type] || 'رباتیک'}</div>
         <div class="s time-row" onclick="event.stopPropagation()" onmousedown="event.stopPropagation()">⏰ <input type="time" value="${c.start}" step="300" onchange="setTime(${c.id}, this.value, null)"><span>تا</span><input type="time" value="${c.end}" step="300" onchange="setTime(${c.id}, null, this.value)"></div>
-        <label class="s color-line" title="رنگ این کلاس"><span>🎨</span><input type="color" value="${cardColor(c)}" onclick="event.stopPropagation()" onmousedown="event.stopPropagation()" onchange="setClassColor(${c.id}, this.value)">${c.color ? `<span class="x" onclick="event.stopPropagation();setClassColor(${c.id}, null)" title="برگشت به رنگ پیش‌فرض">↺</span>` : ''}</label>
-        ${needsStudents(c) ? `<div class="n"><span>${fa(c.students.length)} دانش‌آموز</span>${c.students.map(s => `<span class="mini chip-in" draggable="true" data-type="student" data-id="${s.id}" data-from="${c.id}" title="${esc(s.name)} — بکشید تا خارج شود">${esc(s.name)}</span>`).join('')}</div>` : '<div class="n"><span>🏫 عمومی، بدون دانش‌آموز</span></div>'}
+        <label class="color-line" title="رنگ این کلاس"><input type="color" value="${cardColor(c)}" onclick="event.stopPropagation()" onmousedown="event.stopPropagation()" onchange="setClassColor(${c.id}, this.value)">${c.color ? `<span class="x" onclick="event.stopPropagation();setClassColor(${c.id}, null)" title="برگشت به رنگ پیش‌فرض">↺</span>` : ''}</label>
+        ${needsStudents(c) ? `<details class="n" ${c.students.length <= 3 ? 'open' : ''} onclick="event.stopPropagation()"><summary>🎒 ${fa(c.students.length)} دانش‌آموز</summary><div class="n">${c.students.map(s => `<span class="mini chip-in" draggable="true" data-type="student" data-id="${s.id}" data-from="${c.id}" title="${esc(s.name)} — بکشید تا خارج شود">${esc(s.name)}</span>`).join('')}</div></details>` : ''}
         ${warn ? `<div class="warn-tag">⚠️ ${warn}</div>` : ''}
       </div>`;
     }).join('')}</div>`).join('') || '<p class="empty">اینجا رها کنید</p>'}</div>`;
@@ -258,7 +274,7 @@ async function openTeacher(tid) {
   for (let iso = meta.classes_start; iso <= meta.term_end; iso = addDays(iso, 1)) {
     const dIdx = (new Date(iso + 'T12:00:00').getDay() + 1) % 7;
     for (const c of mine.filter(x => x.day === dIdx)) {
-      const o = overrides.find(x => x.class_id === c.id && x.date === iso);
+      const o = overrides.find(x => x.class_id === c.id && x.date === iso) || (holidays()[iso] ? { status: 'cancel', note: holidays()[iso] } : null);
       const r = reps.filter(x => x.date === iso && (x.class_id === c.id || !x.class_id));
       sessions.push({ iso, c, o, r });
     }
@@ -443,17 +459,17 @@ async function schoolIdFor(name) {
 function newOnDay(day) {
   openModal(`<h2>کلاس جدید · ${meta.days[day]}</h2>
     <div class="grid2"><div class="field"><label>دبیر</label><select id="n-teacher"><option value="">— بعداً —</option>${teachers.map(t => `<option value="${t.id}">${esc(t.name)}</option>`).join('')}</select></div>
-    <div class="field"><label>نوع</label><select id="n-type">${Object.entries(TYPES).map(([k, v]) => `<option value="${k}">${TYPE_ICON[k]} ${v}</option>`).join('')}</select></div>
+    <div class="field"><label>نوع</label><select id="n-type" onchange="$('#n-title-f').style.display=this.value==='robotic'?'':'none'">${Object.entries(TYPES).map(([k, v]) => `<option value="${k}">${TYPE_ICON[k]} ${v}</option>`).join('')}</select></div>
     <div class="field"><label>محل برگزاری (تایپ کنید؛ اگر نبود ساخته می‌شود)</label><input id="n-school" list="n-school-list" placeholder="مثلاً نگاه نو"><datalist id="n-school-list">${schools.map(x => `<option value="${esc(x.name)}">`).join('')}</datalist></div>
     <div class="field"><label>ساعت (آزاد)</label><div class="row" style="gap:6px;flex-wrap:nowrap"><input type="time" id="n-start" value="${(meta.slots[0] || '10:00-12:00').split('-')[0]}" step="300"><span>تا</span><input type="time" id="n-end" value="${(meta.slots[0] || '10:00-12:00').split('-')[1]}" step="300"></div>
       <div class="row" style="gap:4px;margin-top:6px">${meta.slots.map(x => `<button type="button" class="btn ghost sm" onclick="const [a,b]='${x}'.split('-');$('#n-start').value=a;$('#n-end').value=b">${fa(x.replace('-', '–'))}</button>`).join('')}</div></div></div>
-    <div class="field"><label>عنوان (اختیاری)</label><input id="n-title"></div>
+    <div class="field" id="n-title-f" style="display:none"><label>نام کلاس رباتیک</label><input id="n-title"></div>
     <div class="row" style="justify-content:flex-end"><button class="btn ghost" onclick="closeModal()">انصراف</button><button class="btn" onclick="createOnDay(${day})">ساختن</button></div>`);
 }
 async function createOnDay(day) {
   const start = $('#n-start').value, end = $('#n-end').value; const tid = +$('#n-teacher').value || null;
   if (!start || !end || start >= end) return toast('ساعت پایان باید بعد از شروع باشد', 'bad');
-  const body = { type: $('#n-type').value, title: $('#n-title').value.trim(), teacher_id: tid, school_id: await schoolIdFor($('#n-school').value), day, start, end, note: '', student_ids: $('#n-type').value === 'public' ? [] : [...(teacherById(tid)?.student_ids || [])] };
+  const body = { type: $('#n-type').value, title: $('#n-type').value === 'robotic' ? $('#n-title').value.trim() : '', teacher_id: tid, school_id: await schoolIdFor($('#n-school').value), day, start, end, note: '', student_ids: $('#n-type').value === 'public' ? [] : [...(teacherById(tid)?.student_ids || [])] };
   try { await saveWithConfirm(body); closeModal(); toast('کلاس ساخته شد', 'ok'); reloadClasses(); } catch (e) { if (e.message !== 'cancel') toast(e.message, 'bad'); }
 }
 function dayMenu(day) {
@@ -505,8 +521,8 @@ function openClass(id) {
     <div class="grid2" style="margin-top:14px">
       <div class="field"><label>دبیر</label><select id="m-teacher"><option value="">— بدون دبیر —</option>${teachers.map(t => `<option value="${t.id}" ${t.id === c.teacher_id ? 'selected' : ''}>${esc(t.name)}</option>`).join('')}</select></div>
       <div class="field"><label>محل برگزاری (تایپ کنید؛ اگر نبود ساخته می‌شود)</label><input id="m-school" list="m-school-list" value="${esc(c.school_name || '')}"><datalist id="m-school-list">${schools.map(s => `<option value="${esc(s.name)}">`).join('')}</datalist></div>
-      <div class="field"><label>عنوان</label><input id="m-title" value="${esc(c.title)}" placeholder="مثلاً ریاضی هفتم"></div>
-      <div class="field"><label>نوع کلاس</label><select id="m-type">${Object.entries(TYPES).map(([k, v]) => `<option value="${k}" ${k === (c.type || 'robotic') ? 'selected' : ''}>${TYPE_ICON[k]} ${v}</option>`).join('')}</select></div>
+      <div class="field" id="m-title-f" style="${(c.type || 'robotic') === 'robotic' ? '' : 'display:none'}"><label>نام کلاس رباتیک</label><input id="m-title" value="${esc(c.title)}" placeholder="مثلاً رباتیک مقدماتی"></div>
+      <div class="field"><label>نوع کلاس</label><select id="m-type" onchange="$('#m-title-f').style.display=this.value==='robotic'?'':'none'">${Object.entries(TYPES).map(([k, v]) => `<option value="${k}" ${k === (c.type || 'robotic') ? 'selected' : ''}>${TYPE_ICON[k]} ${v}</option>`).join('')}</select></div>
       <div class="field"><label>روز</label><select id="m-day">${meta.days.map((d, i) => `<option value="${i}" ${i === c.day ? 'selected' : ''}>${d}</option>`).join('')}</select></div>
       <div class="field"><label>ساعت (آزاد)</label><div class="row" style="gap:6px;flex-wrap:nowrap"><input type="time" id="m-start" value="${c.start}" step="300"><span>تا</span><input type="time" id="m-end" value="${c.end}" step="300"></div></div>
       <div class="field"><label>میان‌بر</label><div class="row" style="gap:4px">${meta.slots.map(x => `<button type="button" class="btn ghost sm" onclick="const [a,b]='${x}'.split('-');$('#m-start').value=a;$('#m-end').value=b">${fa(x.replace('-', '–'))}</button>`).join('')}</div></div>
@@ -542,6 +558,38 @@ async function delClass(id) {
   await api('/api/classes/' + id, 'DELETE'); closeModal(); toast('حذف شد'); reloadClasses();
 }
 
+/* ================= MONTHS / HOLIDAYS ================= */
+const moSel = new Set();
+const holidays = () => meta.holidays || HOLIDAYS_DEFAULT;
+const isHoliday = iso => !!holidays()[iso];
+function renderMonths() {
+  const H = holidays(), start = meta.term_start, end = meta.term_end;
+  let [jy, jm] = toJalali(start); const [ey, em] = toJalali(end);
+  const marks = {};
+  for (let iso = start; iso <= end; iso = addDays(iso, 1)) {
+    const n = classes.filter(c => c.day === dow(iso)).length;
+    marks[iso] = { cls: (H[iso] ? 'hol ' : '') + (iso < meta.classes_start ? 'pre' : ''), title: H[iso] || (n ? fa(n) + ' کلاس' : ''), badge: H[iso] ? '🚫' : (n ? fa(n) : '') };
+  }
+  let html = '';
+  while (jy < ey || (jy === ey && jm <= em)) { html += jMonthGrid(jy, jm, { selected: moSel, marks, min: start, max: end }); jm++; if (jm > 12) { jm = 1; jy++; } }
+  $('#months').innerHTML = html;
+  $$('#months .jm-c').forEach(c => c.onclick = () => { if (c.classList.contains('out')) return; const i = c.dataset.iso; moSel.has(i) ? moSel.delete(i) : moSel.add(i); c.classList.toggle('sel'); $('#mo-count').textContent = moSel.size ? `${fa(moSel.size)} روز انتخاب شده` : ''; });
+  $('#mo-count').textContent = moSel.size ? `${fa(moSel.size)} روز انتخاب شده` : '';
+}
+$('#mo-pick').onchange = () => {
+  const v = $('#mo-pick').value; $('#mo-pick').value = ''; if (v === '') return;
+  for (let iso = meta.classes_start; iso <= meta.term_end; iso = addDays(iso, 1)) if (v === 'h' ? !!HOLIDAYS_DEFAULT[iso] : dow(iso) === +v) moSel.add(iso);
+  renderMonths();
+};
+async function moHoliday(on) {
+  if (!moSel.size) return toast('اول روزها را انتخاب کنید', 'bad');
+  const H = { ...holidays() };
+  let name = '';
+  if (on) { name = prompt('عنوان تعطیلی (برای همه روزهای انتخاب‌شده):', 'تعطیل'); if (name === null) return; }
+  moSel.forEach(iso => { if (on) H[iso] = name || 'تعطیل'; else delete H[iso]; });
+  await api('/api/meta/holidays', 'PUT', { holidays: H }); meta.holidays = H; moSel.clear(); renderMonths(); toast(on ? 'تعطیل شد' : 'برگشت به روز عادی', 'ok');
+}
+
 /* ================= CALENDAR ================= */
 const jf = new Intl.DateTimeFormat('fa-IR-u-ca-persian', { day: 'numeric' });
 const jfm = new Intl.DateTimeFormat('fa-IR-u-ca-persian', { day: 'numeric', month: 'long' });
@@ -558,10 +606,10 @@ function renderCal() {
     html += `<tr><td class="wk">${fa(w + 1)}</td>`;
     for (let d = 0; d < 7; d++) {
       const iso = addDays(start, w * 7 + d);
-      const before = iso < meta.classes_start || iso > meta.term_end;
+      const before = iso < meta.classes_start || iso > meta.term_end; const hol = holidays()[iso];
       const list = classes.filter(c => c.day === d && (!ft || c.teacher_id === ft));
-      html += `<td class="${before ? 'off' : ''} ${iso === today ? 'today' : ''}"><div class="date">${jf.format(new Date(iso + 'T12:00:00'))}${w === 0 && d === 0 || jf.format(new Date(iso + 'T12:00:00')) === '۱' ? ` <small>${jfm.format(new Date(iso + 'T12:00:00')).replace(/^[۰-۹]+ /, '')}</small>` : ''}</div>
-        ${before ? '' : list.map(c => { const o = overrides.find(x => x.class_id === c.id && x.date === iso); return `<div class="cc ${o ? 'off' : ''}" style="background:${c.teacher_color || '#8b93a7'}" onclick="sessionModal(${c.id},'${iso}')" title="${esc(o?.note || '')}">${esc(clsLabel(c))}<small>${fa(c.start)}</small>${o?.note ? '<i>📝</i>' : ''}</div>`; }).join('')}</td>`;
+      html += `<td class="${before ? 'off' : ''} ${hol ? 'holiday' : ''} ${iso === today ? 'today' : ''}" title="${esc(hol || '')}"><div class="date">${jf.format(new Date(iso + 'T12:00:00'))}${w === 0 && d === 0 || jf.format(new Date(iso + 'T12:00:00')) === '۱' ? ` <small>${jfm.format(new Date(iso + 'T12:00:00')).replace(/^[۰-۹]+ /, '')}</small>` : ''}</div>
+        ${hol ? `<div class="holname">🚫 ${esc(hol)}</div>` : ''}${before ? '' : list.map(c => { const o = overrides.find(x => x.class_id === c.id && x.date === iso); return `<div class="cc ${o || hol ? 'off' : ''}" style="background:${c.teacher_color || '#8b93a7'}" onclick="sessionModal(${c.id},'${iso}')" title="${esc(o?.note || '')}">${esc(clsLabel(c))}<small>${fa(c.start)}</small>${o?.note ? '<i>📝</i>' : ''}</div>`; }).join('')}</td>`;
     }
     html += '</tr>';
   }
