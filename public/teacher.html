@@ -1,0 +1,219 @@
+<!DOCTYPE html>
+<html lang="fa" dir="rtl">
+<head>
+<meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>پنل دبیر</title>
+<link rel="stylesheet" href="/style.css">
+</head>
+<body>
+<div class="shell">
+  <aside class="side">
+    <div class="brand"><i>🎓</i>پنل دبیر</div>
+    <div class="nav active" data-v="week">📅 برنامه من</div>
+    <div class="nav" data-v="report">✍️ ثبت گزارش جلسه</div>
+    <div class="nav" data-v="history">🗂 گزارش‌های من</div>
+    <div class="nav" data-v="plans">📘 طرح درس‌ها</div>
+    <div class="nav" data-v="hours">⏱ ساعت کار و حقوق</div>
+    <div class="nav" data-v="settings">⚙️ رمز عبور و تلگرام</div>
+    <div class="spacer"></div>
+    <div class="user"><span>وارد شده به‌عنوان</span><b id="uname"></b></div>
+    <div class="nav" id="admin-link" style="display:none" onclick="location.href='/admin.html'">🛠 پنل مدیر</div>
+    <div class="nav" onclick="logout()">🚪 خروج</div>
+  </aside>
+  <main class="main">
+    <div class="topbar"><h2 id="hello"></h2></div>
+
+    <section class="view active" id="v-week">
+      <div class="stats" id="stats"></div>
+      <div class="tt" id="tt"></div>
+    </section>
+
+    <section class="view" id="v-report">
+      <div class="card" style="max-width:820px">
+        <h2 id="r-title">گزارش جلسه</h2>
+        <div class="grid3">
+          <div class="field"><label>تاریخ</label><input type="date" id="r-date"></div>
+          <div class="field"><label>کلاس</label><select id="r-class"></select></div>
+          <div class="field"><label>طرح درس مرجع</label><select id="r-plan"><option value="">— انتخاب —</option></select></div>
+        </div>
+        <div class="box">
+          <h3>⏱ ساعت حضور (دقیق بزنید؛ حقوق بر همین اساس محاسبه می‌شود)</h3>
+          <div class="grid3">
+            <div class="field"><label>ساعت ورود</label><input type="time" id="r-in" step="60"></div>
+            <div class="field"><label>ساعت خروج</label><input type="time" id="r-out" step="60"></div>
+            <div class="field"><label>مدت</label><input id="r-dur" readonly style="background:var(--soft)"></div>
+          </div>
+          <div class="row"><button class="btn ghost sm" onclick="stampNow('r-in')">الان وارد شدم</button><button class="btn ghost sm" onclick="stampNow('r-out')">الان خارج شدم</button></div>
+        </div>
+        <div class="box" id="att-box">
+          <h3>✅ حضور و غیاب <span class="muted" style="font-weight:400;font-size:11px">(کلیک: حاضر ← غایب ← تأخیر)</span></h3>
+          <div id="att" class="row" style="gap:6px"></div>
+        </div>
+        <div class="box">
+          <h3>📘 طرح درس و تدریس</h3>
+          <div class="field"><label>موضوع / طرح درس این جلسه</label><textarea id="r-lp" placeholder="چه چیزی تدریس شد؟"></textarea></div>
+          <div class="grid2">
+            <div class="field"><label>طبق طرح درس پیش رفتید؟</label><select id="r-fp"><option value="1">بله، طبق طرح درس</option><option value="0">خیر، انحراف داشت</option></select></div>
+            <div class="field"><label>توضیح انحراف (در صورت وجود)</label><input id="r-fpn" placeholder="مثلاً: به خاطر آزمون، نصف مبحث ماند"></div>
+          </div>
+          <div class="field"><label>چه کارهایی انجام شد</label><textarea id="r-done" placeholder="تمرین‌ها، آزمون، فعالیت گروهی..."></textarea></div>
+          <div class="field"><label>📝 تکلیف داده‌شده</label><textarea id="r-hw" placeholder="تکلیف برای جلسه بعد..." style="min-height:60px"></textarea></div>
+        </div>
+        <div class="grid2">
+          <div class="field"><label>با چه کسانی کار داشتید</label><input id="r-with" placeholder="اولیا، مدیر، ..."></div>
+          <div class="field"><label>یادداشت</label><input id="r-notes"></div>
+        </div>
+        <div class="row" style="justify-content:flex-end"><button class="btn ghost" id="r-cancel" style="display:none" onclick="resetForm()">انصراف از ویرایش</button><button class="btn" id="r-save">ثبت گزارش</button></div>
+      </div>
+    </section>
+
+    <section class="view" id="v-history"><div id="hist"></div></section>
+
+    <section class="view" id="v-plans"><div id="plans"></div></section>
+
+    <section class="view" id="v-hours">
+      <div class="topbar"><h2>ساعت کار و حقوق</h2><div class="row"><input type="date" id="h-from" style="width:150px"><span>تا</span><input type="date" id="h-to" style="width:150px"><button class="btn sm" onclick="loadHours()">محاسبه</button></div></div>
+      <div id="hours"></div>
+    </section>
+
+    <section class="view" id="v-settings">
+      <div class="card" style="max-width:520px;margin-bottom:14px"><h3>🤖 اتصال به تلگرام</h3><div id="tg-box" class="muted">...</div></div>
+      <div class="card" style="max-width:420px"><h3>تغییر رمز عبور</h3>
+        <div class="field"><label>رمز فعلی</label><input type="password" id="p-old"></div>
+        <div class="field"><label>رمز جدید</label><input type="password" id="p-new"></div>
+        <button class="btn" onclick="changePass()">ذخیره</button></div>
+    </section>
+  </main>
+</div>
+<div id="overlay" class="overlay"></div>
+<script src="/common.js"></script>
+<script>
+let me, meta, classes = [], plans = [], reps = [], editId = null;
+const TYPES = { public: 'عمومی', robotic: 'رباتیک', private: 'خصوصی' };
+const nav = v => { $$('.nav[data-v]').forEach(n => n.classList.toggle('active', n.dataset.v === v)); $$('.view').forEach(s => s.classList.toggle('active', s.id === 'v-' + v)); if (v === 'history') loadHist(); if (v === 'plans') loadPlans(); if (v === 'hours') loadHours(); if (v === 'settings') loadTg(); };
+$$('.nav[data-v]').forEach(n => n.onclick = () => nav(n.dataset.v));
+
+async function init() {
+  me = await api('/api/me'); if (!me) return location.href = '/';
+  if (!me.teacher_id) return location.href = '/admin.html';
+  if (me.role === 'admin') $('#admin-link').style.display = '';
+  $('#hello').textContent = `سلام ${me.name} 👋`; $('#uname').textContent = me.name;
+  [meta, classes, plans] = await Promise.all([api('/api/meta'), api('/api/classes'), api('/api/plans?mine=1')]);
+  renderWeek(); fillSelects(); resetForm();
+  const d = new Date(); $('#h-to').value = todayISO(); d.setDate(d.getDate() - 30); $('#h-from').value = d.toISOString().slice(0, 10);
+}
+function renderWeek() {
+  const td = todayDayIndex();
+  $('#stats').innerHTML = [['📚', classes.length, 'کلاس در هفته'], ['🎒', new Set(classes.flatMap(c => c.student_ids)).size, 'دانش‌آموز'], ['📘', plans.length, 'طرح درس']].map(([i, n, l]) => `<div class="stat"><i>${i}</i><div><b>${fa(n)}</b><span>${l}</span></div></div>`).join('');
+  $('#stats').style.gridTemplateColumns = 'repeat(3,1fr)';
+  $('#tt').innerHTML = meta.days.map((d, i) => `<div class="col ${i === td ? 'today' : ''}"><h4>${d}</h4>${classes.filter(c => c.day === i).map(c => `
+    <div class="cls" style="background:${c.teacher_color || '#4f46e5'}" onclick="showClass(${c.id})">
+      <div class="t">${esc(c.title || c.school_name || 'کلاس')}</div>
+      <div class="s">⏰ ${fa(c.start)} تا ${fa(c.end)}</div>
+      ${c.school_name ? `<div class="s">📍 ${esc(c.school_name)}</div>` : ''}
+      <div class="n"><span>${TYPES[c.type] || ''}</span>${c.type !== 'public' ? `<span>${fa(c.students.length)} دانش‌آموز</span>` : ''}</div>
+    </div>`).join('') || '<p class="empty">کلاسی ندارید</p>'}</div>`).join('');
+}
+function showClass(id) {
+  const c = classes.find(x => x.id === id);
+  openModal(`<h2>${esc(c.title || c.school_name || 'کلاس')}</h2>
+    <p class="muted">${meta.days[c.day]} ${fa(c.start)} تا ${fa(c.end)} · ${esc(c.school_name || '')} · ${TYPES[c.type] || ''}</p>
+    ${c.note ? `<p>${esc(c.note)}</p>` : ''}
+    ${c.type !== 'public' ? `<h3>دانش‌آموزان (${fa(c.students.length)})</h3><div class="row">${c.students.map(s => `<span class="chip">${esc(s.name)}</span>`).join('') || '<span class="muted">—</span>'}</div>` : ''}
+    <div class="row" style="margin-top:16px;justify-content:flex-end"><button class="btn ghost" onclick="closeModal()">بستن</button><button class="btn" onclick="closeModal();nav('report');$('#r-class').value=${c.id};onClassChange()">گزارش این کلاس</button></div>`);
+}
+function fillSelects() {
+  $('#r-class').innerHTML = '<option value="">— بدون کلاس مشخص —</option>' + classes.map(c => `<option value="${c.id}">${meta.days[c.day]} ${fa(c.start)} · ${esc(c.title || c.school_name || 'کلاس')}</option>`).join('');
+  $('#r-plan').innerHTML = '<option value="">— انتخاب —</option>' + plans.map(p => `<option value="${p.id}">${esc(p.title)}</option>`).join('');
+}
+function onClassChange(att = {}) {
+  const c = classes.find(x => x.id === +$('#r-class').value);
+  const box = $('#att-box');
+  if (!c || c.type === 'public' || !c.students.length) { box.style.display = 'none'; $('#att').innerHTML = ''; return; }
+  box.style.display = '';
+  $('#att').innerHTML = c.students.map(s => { const v = att[s.id] ?? 'p'; return `<label class="att-chip ${v}" data-id="${s.id}" data-v="${v}" onclick="toggleAtt(this,event)">${esc(s.name)} <b></b></label>`; }).join('');
+  $$('.att-chip').forEach(setAttLabel);
+  if (!editId) { if (!$('#r-in').value) $('#r-in').value = c.start; if (!$('#r-out').value) $('#r-out').value = c.end; calcDur(); }
+}
+const ATT = { p: 'حاضر', a: 'غایب', l: 'تأخیر' };
+function setAttLabel(el) { el.querySelector('b').textContent = ATT[el.dataset.v]; el.className = 'att-chip ' + el.dataset.v; }
+function toggleAtt(el, e) { e.preventDefault(); el.dataset.v = { p: 'a', a: 'l', l: 'p' }[el.dataset.v]; setAttLabel(el); }
+$('#r-class').onchange = () => onClassChange();
+$('#r-plan').onchange = () => { const p = plans.find(x => x.id === +$('#r-plan').value); if (p && !$('#r-lp').value) $('#r-lp').value = p.title + (p.content ? '\n' + p.content.slice(0, 300) : ''); };
+function stampNow(id) { $('#' + id).value = new Date().toTimeString().slice(0, 5); calcDur(); }
+function calcDur() { const a = $('#r-in').value, b = $('#r-out').value; if (a && b && b > a) { const m = (+b.slice(0, 2) * 60 + +b.slice(3)) - (+a.slice(0, 2) * 60 + +a.slice(3)); $('#r-dur').value = `${fa(Math.floor(m / 60))} ساعت و ${fa(m % 60)} دقیقه`; } else $('#r-dur').value = ''; }
+$('#r-in').onchange = calcDur; $('#r-out').onchange = calcDur;
+function resetForm() {
+  editId = null; $('#r-title').textContent = 'گزارش جلسه'; $('#r-cancel').style.display = 'none'; $('#r-save').textContent = 'ثبت گزارش';
+  ['#r-lp', '#r-done', '#r-hw', '#r-with', '#r-notes', '#r-fpn', '#r-in', '#r-out', '#r-dur'].forEach(s => $(s).value = '');
+  $('#r-fp').value = '1'; $('#r-plan').value = ''; $('#r-date').value = todayISO();
+  const td = todayDayIndex(); const c = classes.find(x => x.day === td); $('#r-class').value = c ? c.id : ''; onClassChange();
+}
+$('#r-save').onclick = async () => {
+  const att = {}; $$('.att-chip').forEach(el => att[el.dataset.id] = el.dataset.v);
+  const body = { date: $('#r-date').value, class_id: $('#r-class').value || null, plan_id: $('#r-plan').value || null, check_in: $('#r-in').value, check_out: $('#r-out').value, attendance: att, lesson_plan: $('#r-lp').value, followed_plan: +$('#r-fp').value, plan_note: $('#r-fpn').value, done: $('#r-done').value, homework: $('#r-hw').value, with_whom: $('#r-with').value, notes: $('#r-notes').value };
+  if (!body.date) return toast('تاریخ را وارد کنید', 'bad');
+  if (!body.check_in || !body.check_out) return toast('ساعت ورود و خروج را بزنید', 'bad');
+  if (body.check_out <= body.check_in) return toast('ساعت خروج باید بعد از ورود باشد', 'bad');
+  if (!body.lesson_plan && !body.done) return toast('حداقل طرح درس یا کارهای انجام‌شده را بنویسید', 'bad');
+  if (editId) await api('/api/reports/' + editId, 'PUT', body); else await api('/api/reports', 'POST', body);
+  toast(editId ? 'گزارش ویرایش شد ✅' : 'گزارش ثبت شد ✅', 'ok'); resetForm(); nav('history');
+};
+const attSummary = r => { const v = Object.values(r.attendance || {}); if (!v.length) return ''; return `حاضر ${fa(v.filter(x => x === 'p').length)} · غایب ${fa(v.filter(x => x === 'a').length)}${v.includes('l') ? ' · تأخیر ' + fa(v.filter(x => x === 'l').length) : ''}`; };
+function repCard(r) {
+  return `<div class="rep">
+    <div class="h"><b>${faDate(r.date)} ${r.day != null ? '· ' + meta.days[r.day] : ''} ${r.class_title || r.school_name ? '· ' + esc(r.class_title || r.school_name) : ''}</b>
+      <span class="muted" style="font-size:12px">⏱ ${fa(r.check_in || '—')} تا ${fa(r.check_out || '—')}${r.hours ? ' (' + fa(r.hours) + ' ساعت)' : ''}</span>
+      <span><button class="btn ghost sm" onclick="editRep(${r.id})">ویرایش</button> <button class="btn ghost sm" onclick="delRep(${r.id})">حذف</button></span></div>
+    <div class="row" style="gap:6px;margin:4px 0">${r.followed_plan ? '<span class="chip" style="background:#ecfdf5;border-color:#a7f3d0">✅ طبق طرح درس</span>' : '<span class="chip" style="background:#fff7ed;border-color:#fdba74">⚠️ انحراف از طرح درس' + (r.plan_note ? ': ' + esc(r.plan_note) : '') + '</span>'}${r.plan_title ? `<span class="chip">📘 ${esc(r.plan_title)}</span>` : ''}${attSummary(r) ? `<span class="chip">${attSummary(r)}</span>` : ''}</div>
+    ${r.lesson_plan ? `<div class="lbl">طرح درس</div><div class="body">${esc(r.lesson_plan)}</div>` : ''}
+    ${r.done ? `<div class="lbl">انجام‌شده</div><div class="body">${esc(r.done)}</div>` : ''}
+    ${r.homework ? `<div class="lbl">تکلیف</div><div class="body">${esc(r.homework)}</div>` : ''}
+    ${r.with_whom ? `<div class="lbl">کار با</div><div class="body">${esc(r.with_whom)}</div>` : ''}
+    ${r.notes ? `<div class="lbl">یادداشت</div><div class="body">${esc(r.notes)}</div>` : ''}
+  </div>`;
+}
+async function loadHist() {
+  reps = await api('/api/reports');
+  $('#hist').innerHTML = reps.length ? reps.map(repCard).join('') : '<p class="muted">هنوز گزارشی ثبت نکرده‌اید.</p>';
+}
+function editRep(id) {
+  const r = reps.find(x => x.id === id); if (!r) return;
+  editId = id; nav('report'); $('#r-title').textContent = 'ویرایش گزارش'; $('#r-cancel').style.display = ''; $('#r-save').textContent = 'ذخیره تغییرات';
+  $('#r-date').value = r.date; $('#r-class').value = r.class_id || ''; $('#r-plan').value = r.plan_id || ''; $('#r-in').value = r.check_in; $('#r-out').value = r.check_out; calcDur();
+  $('#r-lp').value = r.lesson_plan; $('#r-fp').value = r.followed_plan ? '1' : '0'; $('#r-fpn').value = r.plan_note; $('#r-done').value = r.done; $('#r-hw').value = r.homework; $('#r-with').value = r.with_whom; $('#r-notes').value = r.notes;
+  onClassChange(r.attendance || {});
+}
+async function delRep(id) { if (!confirm('حذف این گزارش؟')) return; await api('/api/reports/' + id, 'DELETE'); loadHist(); }
+async function loadPlans() {
+  plans = await api('/api/plans?mine=1'); fillSelects();
+  $('#plans').innerHTML = plans.length ? plans.map(p => `<div class="rep" style="border-color:#0ea5e9"><div class="h"><b>📘 ${esc(p.title)}</b><span class="muted" style="font-size:12px">${p.teacher_name ? 'مخصوص شما' : 'عمومی'} · ${faDate(p.created_at)}</span></div>
+    ${p.content ? `<div class="body">${esc(p.content)}</div>` : ''}
+    ${p.file_name ? `<div style="margin-top:8px"><a class="btn ghost sm" href="/files/${p.id}">⬇️ دانلود ${esc(p.file_name)}</a></div>` : ''}
+    <div style="margin-top:8px"><button class="btn sm" onclick="nav('report');$('#r-plan').value=${p.id};$('#r-plan').onchange()">گزارش با این طرح درس</button></div></div>`).join('') : '<p class="muted">هنوز طرح درسی برای شما گذاشته نشده.</p>';
+}
+async function loadHours() {
+  const [p] = await api(`/api/payroll?from=${$('#h-from').value}&to=${$('#h-to').value}`);
+  const pays = await api('/api/payments');
+  if (!p) return;
+  $('#hours').innerHTML = `<div class="stats" style="grid-template-columns:repeat(4,1fr)">
+    <div class="stat"><i>📅</i><div><b>${fa(p.days)}</b><span>روز کاری</span></div></div>
+    <div class="stat"><i>📚</i><div><b>${fa(p.sessions)}</b><span>جلسه</span></div></div>
+    <div class="stat"><i>⏱</i><div><b>${fa(p.hours)}</b><span>ساعت</span></div></div>
+    <div class="stat"><i>💰</i><div><b>${fa(p.amount.toLocaleString('en'))}</b><span>تومان (محاسبه‌شده)</span></div></div></div>
+    <div class="card"><h3>ریز ساعت‌ها</h3><table><tr><th>تاریخ</th><th>ورود</th><th>خروج</th><th>ساعت</th></tr>${p.reports.map(r => `<tr><td>${faDate(r.date)}</td><td>${fa(r.check_in || '—')}</td><td>${fa(r.check_out || '—')}</td><td>${fa(r.hours)}</td></tr>`).join('') || '<tr><td colspan="4" class="muted">گزارشی در این بازه نیست</td></tr>'}</table></div>
+    ${pays.length ? `<div class="card" style="margin-top:12px"><h3>پرداخت‌ها</h3><table><tr><th>بازه</th><th>مبلغ</th><th>توضیح</th></tr>${pays.map(x => `<tr><td>${faDate(x.period_from)} تا ${faDate(x.period_to)}</td><td>${fa(x.amount.toLocaleString('en'))}</td><td>${esc(x.note)}</td></tr>`).join('')}</table></div>` : ''}`;
+}
+async function loadTg() {
+  const t = await api('/api/telegram/me');
+  $('#tg-box').innerHTML = t.linked ? `<p>✅ حساب شما به ربات تلگرام وصل است. از ربات <a href="https://t.me/${t.bot}" target="_blank">@${t.bot}</a> می‌توانید ورود/خروج بزنید و گزارش بفرستید.</p><button class="btn ghost sm" onclick="api('/api/telegram/unlink','POST').then(loadTg)">قطع اتصال</button>`
+    : `<p>۱. ربات <a href="https://t.me/${t.bot}?start=${t.code}" target="_blank"><b>@${t.bot}</b></a> را در تلگرام باز کنید و Start بزنید.<br>۲. اگر خودکار وصل نشد، این کد را برای ربات بفرستید:</p><div style="font-size:28px;font-weight:900;letter-spacing:6px;direction:ltr;text-align:center;background:var(--soft);border-radius:12px;padding:10px">${t.code}</div><p class="muted" style="font-size:12px">بعد از اتصال، از تلگرام می‌توانید ورود و خروج بزنید، حضور و غیاب کنید و گزارش هر جلسه را بفرستید.</p><a class="btn" href="https://t.me/${t.bot}?start=${t.code}" target="_blank">باز کردن ربات</a>`;
+}
+async function changePass() {
+  try { await api('/api/me/password', 'PUT', { old_password: $('#p-old').value, password: $('#p-new').value }); toast('رمز تغییر کرد ✅', 'ok'); $('#p-old').value = $('#p-new').value = ''; }
+  catch (e) { toast(e.message, 'bad'); }
+}
+init();
+</script>
+</body>
+</html>

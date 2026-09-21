@@ -1,0 +1,729 @@
+<!DOCTYPE html>
+<html lang="fa" dir="rtl">
+<head>
+<meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>پنل مدیر | برنامه هفتگی</title>
+<link rel="stylesheet" href="/style.css">
+</head>
+<body>
+<div class="shell">
+  <aside class="side">
+    <div class="brand"><i>📅</i>برنامه هفتگی</div>
+    <div class="nav active" data-v="board">🧩 تخته هفتگی</div>
+    <div class="nav" data-v="calendar">🗓 تقویم ترم</div>
+    <div class="nav" data-v="teachers">👩‍🏫 دبیران</div>
+    <div class="nav" data-v="students">🎒 دانش‌آموزان</div>
+    <div class="nav" data-v="schools">🏫 مدارس</div>
+    <div class="nav" data-v="reports">📝 گزارش دبیران <span class="badge" id="rep-badge" style="display:none"></span></div>
+    <div class="nav" data-v="plans">📘 طرح درس‌ها</div>
+    <div class="nav" data-v="payroll">💰 حقوق</div>
+    <div class="nav" data-v="settings">⚙️ تنظیمات</div>
+    <div class="spacer"></div>
+    <div class="user"><span>وارد شده به‌عنوان</span><b id="uname">مدیر سیستم</b></div>
+    <div class="nav" id="teacher-link" style="display:none" onclick="location.href='/teacher.html'">🎓 پنل دبیر من</div>
+    <div class="nav" onclick="logout()">🚪 خروج</div>
+  </aside>
+  <main class="main">
+
+    <!-- ========== BOARD ========== -->
+    <section class="view active" id="v-board">
+      <div class="topbar">
+        <h2>تخته هفتگی</h2>
+        <div class="row">
+          <select id="f-teacher" style="width:160px"><option value="">همه دبیران</option></select>
+          <select id="f-school" style="width:160px"><option value="">همه مدارس</option></select>
+          <button class="btn ghost" id="btn-undo" onclick="undo()" title="برگرداندن آخرین تغییر (Ctrl+Z)">↶ برگرد</button>
+          <button class="btn ghost" id="btn-redo" onclick="redo()" title="تکرار (Ctrl+Y)">↷ تکرار</button>
+          <button class="btn ghost" onclick="openHistory()">🕘 نسخه‌ها</button>
+        </div>
+      </div>
+      <div class="stats" id="stats"></div>
+      <div class="board">
+        <div class="tt" id="tt"></div>
+        <div class="pool-panel card">
+          <div class="pool-tabs">
+            <div class="pt active" data-p="teachers">👩‍🏫 دبیران</div>
+            <div class="pt" data-p="students">🎒 دانش‌آموزان</div>
+          </div>
+          <input id="pool-q" placeholder="جستجو..." style="margin:8px 0">
+          <select id="pool-school" style="margin-bottom:8px"><option value="">همه مدارس</option></select>
+          <p class="muted" style="font-size:11px;margin:0 0 6px;line-height:1.5">دانش‌آموز را روی نام دبیر رها کنید تا به لیست او اضافه شود. دبیر را روی روز بیندازید تا کلاسش با همان لیست ساخته شود. روی موبایل: اول روی نام بزنید، بعد روی مقصد.</p>
+          <div class="pool" id="pool"></div>
+        </div>
+      </div>
+      <div id="pick-bar" class="pick-bar"></div>
+    </section>
+
+    <!-- ========== CALENDAR ========== -->
+    <section class="view" id="v-calendar">
+      <div class="topbar">
+        <h2>تقویم ترم</h2>
+        <div class="row">
+          <select id="c-teacher" style="width:160px"><option value="">همه دبیران</option></select>
+          <span class="muted" id="c-info" style="font-size:12px"></span>
+        </div>
+      </div>
+      <div class="cal-wrap"><table class="cal" id="cal"></table></div>
+      <p class="muted" style="font-size:12px;margin-top:8px">روی هر کلاس در تقویم کلیک کنید تا آن جلسه را لغو کنید یا یادداشت بگذارید. جلسه‌های لغوشده خط‌خورده نمایش داده می‌شوند.</p>
+    </section>
+
+    <!-- ========== TEACHERS ========== -->
+    <section class="view" id="v-teachers">
+      <div class="topbar"><h2>دبیران</h2><button class="btn" onclick="editTeacher()">+ دبیر جدید</button></div>
+      <div class="card"><table id="t-table"></table></div>
+    </section>
+
+    <!-- ========== STUDENTS ========== -->
+    <section class="view" id="v-students">
+      <div class="topbar"><h2>دانش‌آموزان</h2><div class="row"><input id="s-q" placeholder="جستجو..." style="width:200px"><button class="btn" onclick="editStudent()">+ دانش‌آموز جدید</button></div></div>
+      <div class="card"><table id="s-table"></table></div>
+    </section>
+
+    <!-- ========== SCHOOLS ========== -->
+    <section class="view" id="v-schools">
+      <div class="topbar"><h2>مدارس</h2><button class="btn" onclick="editSchool()">+ مدرسه جدید</button></div>
+      <div class="card"><table id="sc-table"></table></div>
+    </section>
+
+    <!-- ========== REPORTS ========== -->
+    <section class="view" id="v-reports">
+      <div class="topbar"><h2>گزارش دبیران</h2><div class="row"><select id="rep-teacher" style="width:180px"><option value="">همه دبیران</option></select><input type="date" id="rep-from" style="width:150px"><span>تا</span><input type="date" id="rep-to" style="width:150px"><button class="btn sm" onclick="loadReports()">فیلتر</button></div></div>
+      <div id="rep-list"></div>
+    </section>
+
+    <!-- ========== PLANS ========== -->
+    <section class="view" id="v-plans">
+      <div class="topbar"><h2>طرح درس‌ها</h2><button class="btn" onclick="editPlan()">+ طرح درس جدید</button></div>
+      <p class="muted" style="font-size:12px;margin-top:-10px">هر طرح درس را برای یک دبیر یا برای همه بگذارید. دبیر در پنل خودش می‌بیند، دانلود می‌کند و هنگام گزارش می‌گوید طبق آن پیش رفته یا نه.</p>
+      <div id="plan-list"></div>
+    </section>
+
+    <!-- ========== PAYROLL ========== -->
+    <section class="view" id="v-payroll">
+      <div class="topbar"><h2>حقوق و ساعت کار</h2><div class="row"><input type="date" id="pay-from" style="width:150px"><span>تا</span><input type="date" id="pay-to" style="width:150px"><button class="btn sm" onclick="loadPayroll()">محاسبه</button></div></div>
+      <div class="card" style="margin-bottom:14px"><b>فرمول:</b> <span class="muted">حقوق = (نرخ هر روز × تعداد روز کاری) + (نرخ هر جلسه × تعداد جلسه) + (نرخ هر ساعت × مجموع ساعت). هر سه نرخ برای هر دبیر جداگانه تنظیم می‌شود؛ هرکدام را نمی‌خواهید صفر بگذارید. ساعت از ورود و خروجی که دبیر در گزارش هر جلسه ثبت می‌کند حساب می‌شود.</span></div>
+      <div class="card"><table id="pay-table"></table></div>
+      <div class="card" style="margin-top:14px"><h3>پرداخت‌های ثبت‌شده</h3><table id="paid-table"></table></div>
+    </section>
+
+    <!-- ========== SETTINGS ========== -->
+    <section class="view" id="v-settings">
+      <div class="topbar"><h2>تنظیمات</h2></div>
+      <div class="grid3">
+        <div class="card"><h3>بازه‌های زمانی پیش‌فرض</h3><p class="muted" style="font-size:12px">هر خط یک بازه، مثل 10:00-12:00</p><textarea id="set-slots"></textarea><button class="btn" onclick="saveSlots()">ذخیره</button></div>
+        <div class="card"><h3>ترم</h3>
+          <div class="field"><label>شروع ترم (۱ مهر)</label><input type="date" id="set-term"></div>
+          <div class="field"><label>شروع کلاس‌ها</label><input type="date" id="set-cstart"></div>
+          <div class="field"><label>پایان ترم (۳۱ اردیبهشت)</label><input type="date" id="set-end"></div>
+          <button class="btn" onclick="saveTerm()">ذخیره</button></div>
+        <div class="card"><h3>🤖 تلگرام</h3>
+          <div class="field"><label>توکن ربات</label><input id="tg-token" dir="ltr" placeholder="123456:ABC..."></div>
+          <div class="field"><label>نام کاربری ربات (بدون @)</label><input id="tg-bot" dir="ltr"></div>
+          <div class="field"><label>نام کاربری مدیر در تلگرام (بدون @)</label><input id="tg-admin" dir="ltr"></div>
+          <div class="field"><label>آدرس API (پیش‌فرض تلگرام؛ اگر سرور فیلتر است آدرس رله را بگذارید)</label><input id="tg-base" dir="ltr"></div>
+          <div class="row"><button class="btn" onclick="saveTg()">ذخیره</button><button class="btn ghost" onclick="testTg()">تست اتصال</button></div>
+          <div id="tg-status" class="muted" style="font-size:12px;margin-top:8px"></div></div>
+        <div class="card"><h3>رمز مدیر</h3><div class="field"><input id="set-pass" type="password" placeholder="رمز جدید"></div><button class="btn" onclick="savePass()">تغییر رمز</button></div>
+      </div>
+    </section>
+  </main>
+</div>
+<div id="overlay" class="overlay"></div>
+<div id="drawer" class="drawer"><div class="drawer-in" id="drawer-in"></div></div>
+<script src="/common.js"></script>
+<script>
+let meta, teachers = [], students = [], schools = [], classes = [], overrides = [];
+let poolTab = 'teachers';
+const TYPES = { public: 'عمومی', robotic: 'رباتیک', private: 'خصوصی' };
+const TYPE_ICON = { public: '🏫', robotic: '🤖', private: '👤' };
+const needsStudents = c => c.type !== 'public';
+const cardWarn = c => c.type === 'public' ? (!c.school_id ? 'مدرسه را انتخاب کنید' : '') : (!c.students.length ? 'دانش‌آموز اضافه کنید' : '');
+let picked = null; // {type, id} for tap-to-place on touch devices
+
+const nav = v => { $$('.nav[data-v]').forEach(n => n.classList.toggle('active', n.dataset.v === v)); $$('.view').forEach(s => s.classList.toggle('active', s.id === 'v-' + v)); if (v === 'plans') loadPlans(); if (v === 'payroll') loadPayroll(); if (v === 'settings') loadTg(); if (v === 'reports') { loadReports(); localStorage.setItem('seenRep', window._maxRep || 0); $('#rep-badge').style.display = 'none'; } if (v === 'calendar') renderCal(); };
+$$('.nav[data-v]').forEach(n => n.onclick = () => nav(n.dataset.v));
+
+async function loadAll() {
+  [meta, teachers, students, schools, classes, overrides] = await Promise.all([api('/api/meta'), api('/api/teachers'), api('/api/students'), api('/api/schools'), api('/api/classes'), api('/api/overrides')]);
+  const tOpts = teachers.map(t => `<option value="${t.id}">${esc(t.name)}${t.subject ? ' · ' + esc(t.subject) : ''}</option>`).join('');
+  const sOpts = schools.map(s => `<option value="${s.id}">${esc(s.name)}</option>`).join('');
+  ['#f-teacher', '#rep-teacher', '#c-teacher'].forEach(s => { const v = $(s).value; $(s).innerHTML = '<option value="">همه دبیران</option>' + tOpts; $(s).value = v; });
+  ['#f-school', '#pool-school'].forEach(s => { const v = $(s).value; $(s).innerHTML = '<option value="">همه مدارس</option>' + sOpts; $(s).value = v; });
+  $('#set-slots').value = meta.slots.join('\n'); $('#set-term').value = meta.term_start; $('#set-cstart').value = meta.classes_start; $('#set-end').value = meta.term_end; updateBadge();
+  renderBoard(); renderPool(); renderTeachers(); renderStudents(); renderSchools(); refreshUndo();
+  if ($('#v-calendar').classList.contains('active')) renderCal();
+}
+async function reloadClasses() { classes = await api('/api/classes'); renderBoard(); renderPool(); refreshUndo(); }
+const schoolName = id => (schools.find(s => s.id === id) || {}).name || '';
+const teacherById = id => teachers.find(t => t.id === id);
+const clsLabel = c => c.teacher_name ? c.teacher_name + (c.title ? ' · ' + c.title : c.school_name ? ' · ' + c.school_name : '') : (c.title || c.school_name || 'کلاس');
+
+/* ================= BOARD ================= */
+function renderBoard() {
+  const ft = +$('#f-teacher').value, fs = +$('#f-school').value, td = todayDayIndex();
+  $('#stats').innerHTML = [['📚', classes.length, 'کلاس در هفته'], ['👩‍🏫', teachers.length, 'دبیر'], ['🎒', students.filter(s => s.active).length, 'دانش‌آموز فعال'], ['🏫', schools.length, 'مدرسه']].map(([i, n, l]) => `<div class="stat"><i>${i}</i><div><b>${fa(n)}</b><span>${l}</span></div></div>`).join('');
+  $('#tt').innerHTML = meta.days.map((d, i) => {
+    const list = classes.filter(c => c.day === i).sort((a, b) => a.start.localeCompare(b.start) || a.end.localeCompare(b.end));
+    const groups = []; list.forEach(c => { const k = c.start + '-' + c.end; let g = groups.find(x => x.k === k); if (!g) groups.push(g = { k, start: c.start, end: c.end, items: [] }); g.items.push(c); });
+    return `<div class="col drop-day ${i === td ? 'today' : ''} ${i >= 5 ? 'office' : ''}" data-day="${i}"><h4><span class="hb" title="کلاس جدید در ${d}" onclick="event.stopPropagation();newOnDay(${i})">＋</span>${d}<span class="hb" title="عملیات روی کل روز" onclick="event.stopPropagation();dayMenu(${i})">⋯</span></h4>${groups.map(g => `<div class="tgrp ${g.items.length > 1 ? 'multi' : ''}"><div class="tg-h">⏰ ${fa(g.start)} تا ${fa(g.end)}${g.items.length > 1 ? ` <span>${fa(g.items.length)} کلاس همزمان</span>` : ''}</div>${g.items.map(c => {
+      const dim = (ft && c.teacher_id !== ft) || (fs && c.school_id !== fs);
+      const warn = cardWarn(c);
+      return `<div class="cls drop-cls ${dim ? 'dim' : ''} ${warn ? 'warn' : ''}" draggable="true" data-cls="${c.id}" style="background:${c.teacher_color || '#8b93a7'}" title="${esc(c.note)}">
+        <div class="t">${c.teacher_id ? `<span class="chip-in" draggable="true" data-type="teacher" data-id="${c.teacher_id}" data-from="${c.id}" title="بکشید تا از کلاس خارج شود">👤 ${esc(c.teacher_name)}</span>` : '<span class="faint">👤 بدون دبیر</span>'}</div>
+        <div class="s edit-line" data-edit="school" data-cls="${c.id}" title="کلیک: انتخاب محل برگزاری">📍 ${c.school_name ? esc(c.school_name) : '<span class="faint">محل برگزاری؟</span>'}</div>
+        <div class="s edit-line" data-edit="title" data-cls="${c.id}" title="کلیک: نام کلاس">🏷 ${c.title ? esc(c.title) : '<span class="faint">نام کلاس (دلخواه)</span>'}</div>
+        <div class="s edit-line" data-edit="type" data-cls="${c.id}" title="کلیک: نوع کلاس">${TYPE_ICON[c.type] || '🤖'} ${TYPES[c.type] || 'رباتیک'}</div>
+        <div class="s edit-line" data-edit="slot" data-cls="${c.id}" title="کلیک: تغییر ساعت">⏰ ${fa(c.start)} تا ${fa(c.end)}</div>
+        ${needsStudents(c) ? `<div class="n"><span>${fa(c.students.length)} دانش‌آموز</span>${c.students.map(s => `<span class="mini chip-in" draggable="true" data-type="student" data-id="${s.id}" data-from="${c.id}" title="${esc(s.name)} — بکشید تا خارج شود">${esc(s.name)}</span>`).join('')}</div>` : '<div class="n"><span>فقط مدرسه · بدون دانش‌آموز</span></div>'}
+        ${warn ? `<div class="warn-tag">⚠️ ${warn}</div>` : ''}
+      </div>`;
+    }).join('')}</div>`).join('') || '<p class="empty">اینجا رها کنید</p>'}</div>`;
+  }).join('');
+  bindDrops();
+}
+['#f-teacher', '#f-school'].forEach(s => $(s).onchange = renderBoard);
+
+function renderPool() {
+  const q = $('#pool-q').value.trim(), sch = +$('#pool-school').value;
+  $('#pool-school').style.display = poolTab === 'students' ? '' : 'none';
+  let html = '';
+  if (poolTab === 'teachers') {
+    html = teachers.filter(t => !q || t.name.includes(q) || (t.subject || '').includes(q)).map(t => `<div class="tgroup drop-teacher" data-teacher="${t.id}" style="--tc:${t.color}">
+      <div class="stu item" draggable="true" data-type="teacher" data-id="${t.id}"><span><span class="dot" style="background:${t.color}"></span>${esc(t.name)}</span><span class="sch">${esc(t.subject)}${t.subject ? ' · ' : ''}${fa(classes.filter(c => c.teacher_id === t.id).length)} کلاس</span></div>
+      <div class="roster">${t.student_ids.map(id => { const s = students.find(x => x.id === id); return s ? `<span class="rchip chip-in" draggable="true" data-type="student" data-id="${id}" data-roster="${t.id}" title="بکشید تا از لیست دبیر خارج شود">${esc(s.name)}</span>` : ''; }).join('') || '<span class="rhint">دانش‌آموز را اینجا رها کنید</span>'}</div>
+    </div>`).join('') || '<p class="muted" style="font-size:12px">دبیری ثبت نشده. از منوی «دبیران» اضافه کنید.</p>';
+  } else {
+    html = students.filter(s => (!q || s.name.includes(q)) && (!sch || s.school_id === sch)).map(s => {
+      const n = classes.filter(c => c.student_ids.includes(s.id)).length;
+      return `<div class="stu item ${s.active ? '' : 'inactive'}" draggable="true" data-type="student" data-id="${s.id}" title="${esc(s.note)}"><span>${esc(s.name)}</span><span class="sch">${n ? fa(n) + ' کلاس' : ''}</span></div>`;
+    }).join('');
+  }
+  $('#pool').innerHTML = html;
+  bindTeacherDrops();
+  $$('.item', $('#pool')).forEach(el => {
+    el.ondragstart = e => { e.dataTransfer.setData('text/plain', JSON.stringify({ type: el.dataset.type, id: +el.dataset.id })); el.classList.add('dragging'); };
+    el.ondragend = () => el.classList.remove('dragging');
+    el.onclick = () => pick({ type: el.dataset.type, id: +el.dataset.id, name: el.firstChild.textContent });
+    if (el.dataset.type === 'teacher') el.ondblclick = e => { e.stopPropagation(); unpick(); openTeacher(+el.dataset.id); };
+  });
+}
+$('#pool-q').oninput = renderPool; $('#pool-school').onchange = renderPool;
+$$('.pt').forEach(p => p.onclick = () => { poolTab = p.dataset.p; $$('.pt').forEach(x => x.classList.toggle('active', x === p)); renderPool(); });
+
+// tap-to-place fallback (touch)
+function pick(item) {
+  picked = item;
+  const bar = $('#pick-bar');
+  bar.innerHTML = `<span>✋ <b>${esc(item.name)}</b> انتخاب شد. حالا روی یک روز یا کلاس بزنید.</span><button class="btn ghost sm" onclick="unpick()">لغو</button>`;
+  bar.classList.add('show');
+}
+function unpick() { picked = null; $('#pick-bar').classList.remove('show'); }
+
+function bindChips(root) {
+  $$('.chip-in', root).forEach(ch => {
+    const item = () => ({ type: ch.dataset.type, id: +ch.dataset.id, from: +ch.dataset.from || undefined, roster: +ch.dataset.roster || undefined });
+    ch.ondragstart = e => { e.stopPropagation(); e.dataTransfer.setData('text/plain', JSON.stringify(item())); ch.classList.add('dragging'); document.body.classList.add('dragging-in'); };
+    ch.ondragend = () => { ch.classList.remove('dragging'); document.body.classList.remove('dragging-in'); };
+    ch.onclick = e => { e.stopPropagation(); pick({ ...item(), name: ch.textContent.replace('👤 ', '') }); };
+    if (ch.dataset.type === 'teacher') ch.ondblclick = e => { e.stopPropagation(); unpick(); openTeacher(+ch.dataset.id); };
+  });
+}
+
+/* ================= TEACHER DRAWER ================= */
+const jMonth = new Intl.DateTimeFormat('fa-IR-u-ca-persian', { month: 'long', year: 'numeric' });
+const jDay = new Intl.DateTimeFormat('fa-IR-u-ca-persian', { weekday: 'long', day: 'numeric', month: 'long' });
+async function openTeacher(tid) {
+  const t = teacherById(tid); if (!t) return;
+  const reps = await api('/api/reports?teacher_id=' + tid);
+  const mine = classes.filter(c => c.teacher_id === tid);
+  const today = todayISO();
+  const sessions = [];
+  for (let iso = meta.classes_start; iso <= meta.term_end; iso = addDays(iso, 1)) {
+    const dIdx = (new Date(iso + 'T12:00:00').getDay() + 1) % 7;
+    for (const c of mine.filter(x => x.day === dIdx)) {
+      const o = overrides.find(x => x.class_id === c.id && x.date === iso);
+      const r = reps.filter(x => x.date === iso && (x.class_id === c.id || !x.class_id));
+      sessions.push({ iso, c, o, r });
+    }
+  }
+  const done = sessions.filter(s => s.iso <= today && !(s.o?.status === 'cancel')), reported = done.filter(s => s.r.length);
+  let html = `<div class="dh"><div><h2 style="margin:0"><span class="dot" style="background:${t.color}"></span>${esc(t.name)}</h2><span class="muted">${esc(t.subject || '')}</span></div><button class="btn ghost sm" onclick="closeDrawer()">✕ بستن</button></div>
+    <div class="dstats"><div><b>${fa(mine.length)}</b><span>کلاس در هفته</span></div><div><b>${fa(sessions.length)}</b><span>جلسه تا پایان ترم</span></div><div><b>${fa(reported.length)}/${fa(done.length)}</b><span>گزارش ثبت‌شده</span></div></div>
+    <div class="row" style="gap:6px;margin-bottom:8px">${mine.length ? mine.map(c => `<span class="chip" style="border-color:${t.color}">${meta.days[c.day]} ${fa(c.start)} · ${esc(c.title || c.school_name || TYPES[c.type])}</span>`).join('') : '<span class="muted">هنوز کلاسی روی تخته ندارد.</span>'}</div>`;
+  let lastM = '';
+  for (const s of sessions) {
+    const m = jMonth.format(new Date(s.iso + 'T12:00:00'));
+    if (m !== lastM) { html += `<h3 class="dm">${m}</h3>`; lastM = m; }
+    const cancelled = s.o?.status === 'cancel', past = s.iso < today, isToday = s.iso === today;
+    html += `<div class="sess ${cancelled ? 'off' : ''} ${isToday ? 'today' : ''} ${past && !cancelled && !s.r.length ? 'missing' : ''}">
+      <div class="sd">${jDay.format(new Date(s.iso + 'T12:00:00'))} <small>${fa(s.c.start)}–${fa(s.c.end)}</small></div>
+      <div class="sc">${esc(s.c.title || '')} ${s.c.school_name ? '📍 ' + esc(s.c.school_name) : ''} <em>${TYPES[s.c.type] || ''}</em>${s.o?.note ? ` · 📝 ${esc(s.o.note)}` : ''}</div>
+      ${cancelled ? '<div class="st">لغو شده</div>' : s.r.length ? s.r.map(r => `<div class="srep"><div>⏱ ${fa(r.check_in || '—')}–${fa(r.check_out || '—')}${r.hours ? ` (${fa(r.hours)} ساعت)` : ''} · ${r.followed_plan ? '✅ طبق طرح درس' : '⚠️ انحراف: ' + esc(r.plan_note || '')}${attSummary(r) ? ' · ' + attSummary(r) : ''}</div>${r.lesson_plan ? `<div><b>طرح درس:</b> ${esc(r.lesson_plan)}</div>` : ''}${r.done ? `<div><b>انجام‌شده:</b> ${esc(r.done)}</div>` : ''}${r.homework ? `<div><b>تکلیف:</b> ${esc(r.homework)}</div>` : ''}${r.with_whom ? `<div><b>کار با:</b> ${esc(r.with_whom)}</div>` : ''}${r.notes ? `<div><b>یادداشت:</b> ${esc(r.notes)}</div>` : ''}</div>`).join('') : past ? '<div class="st miss">گزارش ثبت نشده</div>' : isToday ? '<div class="st">امروز</div>' : ''}
+      <div class="sa"><a href="#" onclick="closeDrawer();nav('calendar');return false">تقویم</a> · <a href="#" onclick="sessionModal(${s.c.id},'${s.iso}');return false">${cancelled ? 'برگرداندن' : 'لغو / یادداشت'}</a></div>
+    </div>`;
+  }
+  $('#drawer-in').innerHTML = html; $('#drawer').classList.add('show');
+  const tEl = $('#drawer-in .sess.today'); if (tEl) setTimeout(() => tEl.scrollIntoView({ block: 'center' }), 50);
+}
+function closeDrawer() { $('#drawer').classList.remove('show'); }
+document.addEventListener('click', e => { if (e.target.id === 'drawer') closeDrawer(); });
+
+/* ================= NEW-REPORT BADGE ================= */
+async function updateBadge() {
+  try {
+    const reps = await api('/api/reports');
+    const seen = +localStorage.getItem('seenRep') || 0;
+    const n = reps.filter(r => r.id > seen).length;
+    const b = $('#rep-badge'); b.style.display = n ? '' : 'none'; b.textContent = fa(n);
+    window._maxRep = reps.length ? Math.max(...reps.map(r => r.id)) : seen;
+  } catch {}
+}
+setInterval(updateBadge, 60000);
+function bindTeacherDrops() {
+  bindChips($('#pool'));
+  $$('.drop-teacher').forEach(g => {
+    g.ondragover = e => { e.preventDefault(); e.stopPropagation(); g.classList.add('over'); };
+    g.ondragleave = () => g.classList.remove('over');
+    g.ondrop = e => { e.preventDefault(); e.stopPropagation(); g.classList.remove('over'); $('.pool-panel').classList.remove('over'); handleDrop(JSON.parse(e.dataTransfer.getData('text/plain')), { teacher: +g.dataset.teacher }); };
+    g.onclick = e => { if (picked && picked.type === 'student' && !e.target.closest('.chip-in')) { e.stopPropagation(); const p = picked; unpick(); handleDrop(p, { teacher: +g.dataset.teacher }); } };
+  });
+}
+function inlineEdit(line) {
+  const id = +line.dataset.cls, kind = line.dataset.edit, c = classes.find(x => x.id === id);
+  let el;
+  if (kind === 'school') {
+    el = document.createElement('select');
+    el.innerHTML = '<option value="">— محل برگزاری —</option>' + schools.map(x => `<option value="${x.id}" ${x.id === c.school_id ? 'selected' : ''}>${esc(x.name)}</option>`).join('');
+  } else if (kind === 'type') {
+    el = document.createElement('select');
+    el.innerHTML = Object.entries(TYPES).map(([k, v]) => `<option value="${k}" ${k === c.type ? 'selected' : ''}>${TYPE_ICON[k]} ${v}</option>`).join('');
+  } else if (kind === 'slot') {
+    el = document.createElement('div'); el.className = 'inline-ed time-ed';
+    el.innerHTML = `<input type="time" value="${c.start}" step="300"><span>تا</span><input type="time" value="${c.end}" step="300"><button class="ok">✓</button>${meta.slots.map(x => `<button class="preset" data-v="${x}">${fa(x.replace('-', '–'))}</button>`).join('')}`;
+    const [i1, i2] = el.querySelectorAll('input');
+    const save = async (st, en) => { if (!st || !en || st >= en) return toast('بازه نامعتبر است', 'bad'); const body = bodyOf(c); body.start = st; body.end = en; try { await saveWithConfirm(body, id); await reloadClasses(); } catch (e) { renderBoard(); if (e.message !== 'cancel') toast(e.message, 'bad'); } };
+    el.querySelector('.ok').onclick = e => { e.stopPropagation(); save(i1.value, i2.value); };
+    el.querySelectorAll('.preset').forEach(b => b.onclick = e => { e.stopPropagation(); const [a, z] = b.dataset.v.split('-'); save(a, z); });
+    el.onkeydown = e => { if (e.key === 'Enter') { e.preventDefault(); save(i1.value, i2.value); } if (e.key === 'Escape') renderBoard(); };
+    el.onclick = e => e.stopPropagation(); el.onmousedown = e => e.stopPropagation();
+    line.replaceWith(el); i1.focus(); return;
+  } else {
+    el = document.createElement('input'); el.value = c.title; el.placeholder = 'نام کلاس';
+  }
+  el.className = 'inline-ed';
+  const commit = async () => {
+    const body = bodyOf(c);
+    if (kind === 'school') body.school_id = +el.value || null;
+    else if (kind === 'title') body.title = el.value.trim();
+    else if (kind === 'type') { body.type = el.value; if (body.type === 'public' && body.student_ids.length && !confirm('کلاس عمومی دانش‌آموز نمی‌گیرد. دانش‌آموزهای این کلاس حذف شوند؟')) { renderBoard(); return; } }
+    try { await saveWithConfirm(body, id); await reloadClasses(); } catch (e) { renderBoard(); if (e.message !== 'cancel') toast(e.message, 'bad'); }
+  };
+  el.onchange = commit;
+  el.onblur = () => { if (kind === 'title') commit(); else if (!el.value && kind !== 'title') renderBoard(); };
+  el.onkeydown = e => { if (e.key === 'Enter') { e.preventDefault(); el.blur(); } if (e.key === 'Escape') renderBoard(); };
+  el.onclick = e => e.stopPropagation();
+  el.onmousedown = e => e.stopPropagation();
+  line.replaceWith(el); el.focus();
+}
+function bindDrops() {
+  bindChips($('#tt'));
+  $$('.edit-line').forEach(l => l.onclick = e => { e.stopPropagation(); if (picked) { const p = picked; unpick(); handleDrop(p, { cls: +l.dataset.cls }); } else inlineEdit(l); });
+  const panel = $('.pool-panel');
+  panel.ondragover = e => { e.preventDefault(); panel.classList.add('over'); };
+  panel.ondragleave = () => panel.classList.remove('over');
+  panel.ondrop = e => { e.preventDefault(); panel.classList.remove('over'); handleDrop(JSON.parse(e.dataTransfer.getData('text/plain')), { remove: true }); };
+  panel.onclick = e => { if (picked && picked.from && !e.target.closest('.item')) { const p = picked; unpick(); handleDrop(p, { remove: true }); } };
+  $$('.drop-day').forEach(col => {
+    col.ondragover = e => { e.preventDefault(); col.classList.add('over'); };
+    col.ondragleave = () => col.classList.remove('over');
+    col.ondrop = e => { e.preventDefault(); e.stopPropagation(); col.classList.remove('over'); handleDrop(JSON.parse(e.dataTransfer.getData('text/plain')), { day: +col.dataset.day }); };
+    col.onclick = e => { if (picked && !e.target.closest('.cls')) { const p = picked; unpick(); handleDrop(p, { day: +col.dataset.day }); } };
+  });
+  $$('.drop-cls').forEach(card => {
+    card.ondragover = e => { e.preventDefault(); e.stopPropagation(); card.classList.add('over'); };
+    card.ondragleave = () => card.classList.remove('over');
+    card.ondrop = e => { e.preventDefault(); e.stopPropagation(); card.classList.remove('over'); card.closest('.drop-day').classList.remove('over'); handleDrop(JSON.parse(e.dataTransfer.getData('text/plain')), { cls: +card.dataset.cls }); };
+    card.ondragstart = e => { e.dataTransfer.setData('text/plain', JSON.stringify({ type: 'class', id: +card.dataset.cls })); card.classList.add('dragging'); };
+    card.ondragend = () => card.classList.remove('dragging');
+    card.onclick = e => { e.stopPropagation(); if (picked) { const p = picked; unpick(); handleDrop(p, { cls: +card.dataset.cls }); } else openClass(+card.dataset.cls); };
+  });
+}
+
+async function removeFrom(item) {
+  const c = classes.find(x => x.id === item.from); if (!c) return;
+  const body = bodyOf(c);
+  if (item.type === 'teacher') body.teacher_id = null; else body.student_ids = body.student_ids.filter(x => x !== item.id);
+  await api('/api/classes/' + c.id, 'PUT', { ...body, force: true });
+}
+async function setRoster(tid, ids) { await api(`/api/teachers/${tid}/students`, 'PUT', { student_ids: ids }); teachers = await api('/api/teachers'); renderPool(); }
+async function handleDrop(item, target) {
+  try {
+    if (target.teacher) {
+      if (item.type !== 'student') return;
+      const t = teacherById(target.teacher);
+      if (t.student_ids.includes(item.id)) return toast('این دانش‌آموز در لیست این دبیر هست');
+      if (item.roster && item.roster !== t.id) { const src = teacherById(item.roster); await api(`/api/teachers/${src.id}/students`, 'PUT', { student_ids: src.student_ids.filter(x => x !== item.id) }); }
+      await setRoster(t.id, [...t.student_ids, item.id]);
+      return toast(`به لیست ${t.name} اضافه شد`, 'ok');
+    }
+    if (target.remove) {
+      if (item.roster) { const t = teacherById(item.roster); await setRoster(t.id, t.student_ids.filter(x => x !== item.id)); return toast('از لیست دبیر خارج شد', 'ok'); }
+      if (!item.from) return;
+      await removeFrom(item); await reloadClasses();
+      return toast(item.type === 'teacher' ? 'دبیر از کلاس خارج شد' : 'دانش‌آموز از کلاس خارج شد', 'ok');
+    }
+    if (item.from && target.cls === item.from) return;
+    if (item.type === 'class') {
+      if (target.day == null) return;
+      const c = classes.find(x => x.id === item.id); if (c.day === target.day) return;
+      await saveWithConfirm({ ...bodyOf(c), day: target.day }, c.id);
+      toast('کلاس جابه‌جا شد', 'ok');
+    } else if (target.cls) {
+      const c = classes.find(x => x.id === target.cls);
+      const body = bodyOf(c);
+      if (item.type === 'teacher') { if (c.teacher_id === item.id) return; body.teacher_id = item.id; body.student_ids = [...new Set([...body.student_ids, ...(teacherById(item.id)?.student_ids || [])])]; }
+      else { if (c.type === 'public') return toast('کلاس عمومی دانش‌آموز نمی‌گیرد. نوع کلاس را عوض کنید', 'bad'); if (c.student_ids.includes(item.id)) return toast('این دانش‌آموز در کلاس هست'); body.student_ids = [...c.student_ids, item.id]; }
+      await saveWithConfirm(body, c.id);
+      if (item.from) await removeFrom(item);
+      toast(item.type === 'teacher' ? 'دبیر تعیین شد' : 'دانش‌آموز اضافه شد', 'ok');
+    } else {
+      // new class on a day
+      const body = { type: 'robotic', title: '', teacher_id: item.type === 'teacher' ? item.id : null, school_id: null, day: target.day, start: (meta.slots[0] || '10:00-12:00').split('-')[0], end: (meta.slots[0] || '10:00-12:00').split('-')[1], note: '', student_ids: item.type === 'student' ? [item.id] : [...(teacherById(item.id)?.student_ids || [])] };
+      const id = await saveWithConfirm(body);
+      if (id) { if (item.from) await removeFrom(item); await reloadClasses(); toast('کلاس ساخته شد؛ روی کارت محل برگزاری و نام را بزنید', 'ok'); if (item.type === 'none') openClass(id); return; }
+    }
+    await reloadClasses();
+  } catch (e) { if (e.message !== 'cancel') toast(e.message, 'bad'); }
+}
+const bodyOf = c => ({ type: c.type || 'robotic', title: c.title, teacher_id: c.teacher_id, school_id: c.school_id, day: c.day, start: c.start, end: c.end, note: c.note, student_ids: [...c.student_ids] });
+async function saveWithConfirm(body, id, force = false) {
+  try {
+    const r = id ? await api('/api/classes/' + id, 'PUT', { ...body, force }) : await api('/api/classes', 'POST', { ...body, force });
+    return r.id;
+  } catch (e) {
+    if (e.status === 409) {
+      const list = e.data.conflicts.map(c => `• ${c.type === 'teacher' ? 'دبیر' : 'دانش‌آموز'} ${c.name} همزمان در ${c.class} است`).join('\n');
+      if (confirm(`⚠️ تداخل:\n${list}\n\nبا وجود تداخل ذخیره شود؟`)) return saveWithConfirm(body, id, true);
+      throw new Error('cancel');
+    }
+    throw e;
+  }
+}
+function quickNew() { handleDrop({ type: 'none' }, { day: todayDayIndex() }); }
+function newOnDay(day) {
+  openModal(`<h2>کلاس جدید · ${meta.days[day]}</h2>
+    <div class="grid2"><div class="field"><label>دبیر</label><select id="n-teacher"><option value="">— بعداً —</option>${teachers.map(t => `<option value="${t.id}">${esc(t.name)}</option>`).join('')}</select></div>
+    <div class="field"><label>نوع</label><select id="n-type">${Object.entries(TYPES).map(([k, v]) => `<option value="${k}">${TYPE_ICON[k]} ${v}</option>`).join('')}</select></div>
+    <div class="field"><label>مدرسه / محل</label><select id="n-school"><option value="">—</option>${schools.map(x => `<option value="${x.id}">${esc(x.name)}</option>`).join('')}</select></div>
+    <div class="field"><label>بازه</label><select id="n-slot">${meta.slots.map(x => `<option value="${x}">${fa(x.replace('-', ' تا '))}</option>`).join('')}</select></div></div>
+    <div class="field"><label>عنوان (اختیاری)</label><input id="n-title"></div>
+    <div class="row" style="justify-content:flex-end"><button class="btn ghost" onclick="closeModal()">انصراف</button><button class="btn" onclick="createOnDay(${day})">ساختن</button></div>`);
+}
+async function createOnDay(day) {
+  const [start, end] = $('#n-slot').value.split('-'); const tid = +$('#n-teacher').value || null;
+  const body = { type: $('#n-type').value, title: $('#n-title').value.trim(), teacher_id: tid, school_id: +$('#n-school').value || null, day, start, end, note: '', student_ids: $('#n-type').value === 'public' ? [] : [...(teacherById(tid)?.student_ids || [])] };
+  try { await saveWithConfirm(body); closeModal(); toast('کلاس ساخته شد', 'ok'); reloadClasses(); } catch (e) { if (e.message !== 'cancel') toast(e.message, 'bad'); }
+}
+function dayMenu(day) {
+  const n = classes.filter(c => c.day === day).length;
+  const days = meta.days.map((d, i) => i === day ? '' : `<option value="${i}">${d}</option>`).join('');
+  openModal(`<h2>${meta.days[day]} · ${fa(n)} کلاس</h2>
+    <div class="grid2"><div class="field"><label>مقصد</label><select id="dm-to">${days}</select></div></div>
+    <div class="row" style="gap:8px;flex-wrap:wrap">
+      <button class="btn" ${n ? '' : 'disabled'} onclick="bulk('move',${day})">📦 انتقال کل روز به مقصد</button>
+      <button class="btn ghost" ${n ? '' : 'disabled'} onclick="bulk('copy',${day})">📋 کپی کل روز به مقصد</button>
+      <button class="btn danger" ${n ? '' : 'disabled'} onclick="bulk('clear',${day})">🗑 خالی کردن این روز</button>
+    </div>
+    <p class="muted" style="font-size:12px;margin-top:12px">همه این کارها با «↶ برگرد» قابل برگشت‌اند.</p>
+    <div class="row" style="justify-content:flex-end"><button class="btn ghost" onclick="closeModal()">بستن</button></div>`);
+}
+async function bulk(action, from_day) {
+  const to_day = +$('#dm-to').value;
+  if (action === 'clear' && !confirm(`همه کلاس‌های ${meta.days[from_day]} حذف شوند؟ (قابل برگشت با ↶)`)) return;
+  try { const r = await api('/api/classes/bulk', 'POST', { action, from_day, to_day }); closeModal(); toast(`${fa(r.count)} کلاس ${action === 'move' ? 'منتقل شد' : action === 'copy' ? 'کپی شد' : 'حذف شد'}`, 'ok'); reloadClasses(); }
+  catch (e) { toast(e.message, 'bad'); }
+}
+async function undo() { try { const r = await api('/api/undo', 'POST'); toast('برگشت: ' + r.label, 'ok'); reloadClasses(); } catch (e) { toast(e.message, 'bad'); } }
+async function redo() { try { const r = await api('/api/redo', 'POST'); toast('تکرار: ' + r.label, 'ok'); reloadClasses(); } catch (e) { toast(e.message, 'bad'); } }
+async function refreshUndo() { try { const s = await api('/api/snapshots'); $('#btn-undo').disabled = !s.canUndo; $('#btn-redo').disabled = !s.canRedo; } catch {} }
+document.addEventListener('keydown', e => { if ((e.ctrlKey || e.metaKey) && !e.target.matches('input,textarea,select')) { if (e.key === 'z') { e.preventDefault(); undo(); } if (e.key === 'y') { e.preventDefault(); redo(); } } });
+async function openHistory() {
+  const s = await api('/api/snapshots');
+  const KIND = { auto: 'خودکار', manual: 'دستی', restore: 'قبل از بازگردانی' };
+  openModal(`<div class="row" style="justify-content:space-between"><h2 style="margin:0">🕘 نسخه‌های برنامه هفتگی</h2><button class="btn sm" onclick="saveSnap()">💾 ذخیره نسخه فعلی</button></div>
+    <p class="muted" style="font-size:12px">قبل از هر تغییر یک نسخه خودکار ذخیره می‌شود. هر نسخه را که بازگردانی کنید، وضعیت فعلی هم به‌عنوان نسخه ذخیره می‌شود، پس چیزی از دست نمی‌رود.</p>
+    <table><tr><th>زمان</th><th>توسط</th><th>نوع</th><th>توضیح</th><th>کلاس‌ها</th><th></th></tr>${s.list.map(r => `<tr><td style="white-space:nowrap">${new Intl.DateTimeFormat('fa-IR', { dateStyle: 'short', timeStyle: 'short' }).format(new Date(r.created_at + 'Z'))}</td><td>${esc(r.by || '—')}</td><td>${KIND[r.kind] || r.kind}</td><td>${esc(r.label)}</td><td>${fa(r.classes)}</td><td><button class="btn ghost sm" onclick="restoreSnap(${r.id})">بازگردانی</button></td></tr>`).join('') || '<tr><td colspan="6" class="muted">هنوز نسخه‌ای نیست</td></tr>'}</table>`);
+}
+async function saveSnap() { const l = prompt('نام این نسخه:', 'نسخه نهایی'); if (l === null) return; await api('/api/snapshots', 'POST', { label: l }); toast('ذخیره شد', 'ok'); openHistory(); }
+async function restoreSnap(id) { if (!confirm('برنامه هفتگی به این نسخه برگردد؟')) return; await api(`/api/snapshots/${id}/restore`, 'POST'); closeModal(); toast('بازگردانی شد', 'ok'); reloadClasses(); }
+
+/* ---------- class modal ---------- */
+let M = null;
+function openClass(id) {
+  const c = classes.find(x => x.id === id); if (!c) return;
+  M = { id, body: bodyOf(c) };
+  const slot = `${c.start}-${c.end}`, custom = !meta.slots.includes(slot);
+  openModal(`<div class="row" style="justify-content:space-between"><h2 style="margin:0">ویرایش کلاس</h2><span class="chip">${meta.days[c.day]}</span></div>
+    <div class="grid2" style="margin-top:14px">
+      <div class="field"><label>دبیر</label><select id="m-teacher"><option value="">— بدون دبیر —</option>${teachers.map(t => `<option value="${t.id}" ${t.id === c.teacher_id ? 'selected' : ''}>${esc(t.name)}</option>`).join('')}</select></div>
+      <div class="field"><label>مدرسه</label><select id="m-school"><option value="">—</option>${schools.map(s => `<option value="${s.id}" ${s.id === c.school_id ? 'selected' : ''}>${esc(s.name)}</option>`).join('')}</select></div>
+      <div class="field"><label>عنوان</label><input id="m-title" value="${esc(c.title)}" placeholder="مثلاً ریاضی هفتم"></div>
+      <div class="field"><label>نوع کلاس</label><select id="m-type">${Object.entries(TYPES).map(([k, v]) => `<option value="${k}" ${k === (c.type || 'robotic') ? 'selected' : ''}>${TYPE_ICON[k]} ${v}</option>`).join('')}</select></div>
+      <div class="field"><label>روز</label><select id="m-day">${meta.days.map((d, i) => `<option value="${i}" ${i === c.day ? 'selected' : ''}>${d}</option>`).join('')}</select></div>
+      <div class="field"><label>بازه</label><select id="m-slot" onchange="$('#m-custom').style.display=this.value==='custom'?'':'none'">${meta.slots.map(s => `<option value="${s}" ${s === slot ? 'selected' : ''}>${fa(s.replace('-', ' تا '))}</option>`).join('')}<option value="custom" ${custom ? 'selected' : ''}>ساعت دلخواه...</option></select></div>
+      <div class="field" id="m-custom" style="${custom ? '' : 'display:none'}"><label>از / تا</label><div class="row" style="gap:6px;flex-wrap:nowrap"><input type="time" id="m-start" value="${c.start}"><input type="time" id="m-end" value="${c.end}"></div></div>
+    </div>
+    <div class="field"><label>یادداشت</label><input id="m-note" value="${esc(c.note)}"></div>
+    <label>دانش‌آموزان (<span id="m-count">${fa(c.students.length)}</span>)</label>
+    <div class="dropzone" id="m-members" style="min-height:70px;padding:10px"></div>
+    <div class="row" style="margin-top:8px"><input id="m-add" list="m-list" placeholder="افزودن دانش‌آموز: نام را بنویسید و Enter بزنید" class="grow"><datalist id="m-list">${students.map(s => `<option value="${esc(s.name)}">`).join('')}</datalist></div>
+    <div class="row" style="margin-top:18px;justify-content:space-between">
+      <button class="btn danger sm" onclick="delClass(${id})">حذف کلاس</button>
+      <span class="grow"></span>
+      <button class="btn ghost" onclick="closeModal()">انصراف</button>
+      <button class="btn" onclick="saveModal()">ذخیره</button>
+    </div>`);
+  renderMembers();
+  $('#m-add').onkeydown = e => { if (e.key === 'Enter') { e.preventDefault(); const s = students.find(x => x.name === e.target.value.trim()); if (s && !M.body.student_ids.includes(s.id)) { M.body.student_ids.push(s.id); renderMembers(); } e.target.value = ''; } };
+}
+function renderMembers() {
+  const box = $('#m-members'); if (!box) return;
+  $('#m-count').textContent = fa(M.body.student_ids.length);
+  box.innerHTML = M.body.student_ids.map(id => { const s = students.find(x => x.id === id); return s ? `<div class="member"><span>${esc(s.name)}</span><span class="x" onclick="M.body.student_ids=M.body.student_ids.filter(x=>x!==${id});renderMembers()">✕</span></div>` : ''; }).join('') || '<div class="hint" style="padding:12px">بدون دانش‌آموز</div>';
+}
+async function saveModal() {
+  const b = M.body;
+  b.type = $('#m-type').value; b.teacher_id = +$('#m-teacher').value || null; b.school_id = +$('#m-school').value || null; b.title = $('#m-title').value.trim(); b.day = +$('#m-day').value; b.note = $('#m-note').value;
+  if ($('#m-slot').value === 'custom') { b.start = $('#m-start').value; b.end = $('#m-end').value; } else [b.start, b.end] = $('#m-slot').value.split('-');
+  if (!b.start || !b.end || b.start >= b.end) return toast('بازه زمانی نامعتبر است', 'bad');
+  try { await saveWithConfirm(b, M.id); closeModal(); toast('ذخیره شد ✅', 'ok'); reloadClasses(); }
+  catch (e) { if (e.message !== 'cancel') toast(e.message, 'bad'); }
+}
+async function delClass(id) {
+  if (!confirm('این کلاس حذف شود؟')) return;
+  await api('/api/classes/' + id, 'DELETE'); closeModal(); toast('حذف شد'); reloadClasses();
+}
+
+/* ================= CALENDAR ================= */
+const jf = new Intl.DateTimeFormat('fa-IR-u-ca-persian', { day: 'numeric' });
+const jfm = new Intl.DateTimeFormat('fa-IR-u-ca-persian', { day: 'numeric', month: 'long' });
+const jfull = new Intl.DateTimeFormat('fa-IR-u-ca-persian', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' });
+const addDays = (iso, n) => { const d = new Date(iso + 'T12:00:00'); d.setDate(d.getDate() + n); return d.toISOString().slice(0, 10); };
+function weekStart(iso) { const d = new Date(iso + 'T12:00:00'); const back = (d.getDay() + 1) % 7; return addDays(iso, -back); } // back to Saturday
+function renderCal() {
+  const ft = +$('#c-teacher').value;
+  const start = weekStart(meta.term_start), today = todayISO();
+  $('#c-info').textContent = `شروع ترم: ${jfm.format(new Date(meta.term_start + 'T12:00:00'))} · شروع کلاس‌ها: ${jfm.format(new Date(meta.classes_start + 'T12:00:00'))}`;
+  let html = `<tr><th>هفته</th>${meta.days.map(d => `<th>${d}</th>`).join('')}</tr>`;
+  const weeks = Math.ceil((new Date(meta.term_end) - new Date(start)) / 6048e5) + 1;
+  for (let w = 0; w < weeks; w++) {
+    html += `<tr><td class="wk">${fa(w + 1)}</td>`;
+    for (let d = 0; d < 7; d++) {
+      const iso = addDays(start, w * 7 + d);
+      const before = iso < meta.classes_start || iso > meta.term_end;
+      const list = classes.filter(c => c.day === d && (!ft || c.teacher_id === ft));
+      html += `<td class="${before ? 'off' : ''} ${iso === today ? 'today' : ''}"><div class="date">${jf.format(new Date(iso + 'T12:00:00'))}${w === 0 && d === 0 || jf.format(new Date(iso + 'T12:00:00')) === '۱' ? ` <small>${jfm.format(new Date(iso + 'T12:00:00')).replace(/^[۰-۹]+ /, '')}</small>` : ''}</div>
+        ${before ? '' : list.map(c => { const o = overrides.find(x => x.class_id === c.id && x.date === iso); return `<div class="cc ${o ? 'off' : ''}" style="background:${c.teacher_color || '#8b93a7'}" onclick="sessionModal(${c.id},'${iso}')" title="${esc(o?.note || '')}">${esc(clsLabel(c))}<small>${fa(c.start)}</small>${o?.note ? '<i>📝</i>' : ''}</div>`; }).join('')}</td>`;
+    }
+    html += '</tr>';
+  }
+  $('#cal').innerHTML = html;
+}
+$('#c-teacher').onchange = renderCal;
+function sessionModal(cid, iso) {
+  const c = classes.find(x => x.id === cid), o = overrides.find(x => x.class_id === cid && x.date === iso);
+  openModal(`<h2>${esc(clsLabel(c))}</h2><p class="muted">${jfull.format(new Date(iso + 'T12:00:00'))} · ${fa(c.start)} تا ${fa(c.end)} · ${esc(c.teacher_name || '')}</p>
+    <div class="field"><label>وضعیت این جلسه</label><select id="o-status"><option value="none" ${!o ? 'selected' : ''}>برگزار می‌شود</option><option value="cancel" ${o?.status === 'cancel' ? 'selected' : ''}>لغو شده</option><option value="note" ${o?.status === 'note' ? 'selected' : ''}>فقط یادداشت</option></select></div>
+    <div class="field"><label>یادداشت</label><input id="o-note" value="${esc(o?.note || '')}" placeholder="مثلاً: جلسه جبرانی، امتحان..."></div>
+    <div class="row" style="justify-content:flex-end"><button class="btn ghost" onclick="closeModal()">انصراف</button><button class="btn" onclick="saveOverride(${cid},'${iso}')">ذخیره</button></div>`);
+}
+async function saveOverride(cid, iso) {
+  const status = $('#o-status').value, note = $('#o-note').value;
+  await api('/api/overrides', 'PUT', { class_id: cid, date: iso, status: status === 'none' && note ? 'note' : status, note });
+  overrides = await api('/api/overrides'); closeModal(); renderCal(); toast('ذخیره شد', 'ok'); if ($('#drawer').classList.contains('show')) openTeacher(cid && classes.find(x => x.id === cid)?.teacher_id);
+}
+
+/* ================= TEACHERS ================= */
+const COLORS = ['#5b5bd6', '#0ea5e9', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6', '#ec4899', '#14b8a6', '#f97316', '#64748b'];
+function renderTeachers() {
+  $('#t-table').innerHTML = `<tr><th>رنگ</th><th>نام</th><th>درس</th><th>نام کاربری</th><th>رمز</th><th>تعداد کلاس</th><th></th></tr>` + teachers.map(t => `<tr>
+    <td><span class="dot" style="background:${t.color}"></span></td><td><b>${esc(t.name)}</b></td><td>${esc(t.subject)}</td><td dir="ltr">${esc(t.username)}</td><td dir="ltr">${esc(t.password)}${t.is_admin ? ' <span class="chip" style="font-size:10px">مدیر</span>' : ''}</td>
+    <td>${fa(classes.filter(c => c.teacher_id === t.id).length)}</td>
+    <td><button class="btn ghost sm" onclick="editTeacher(${t.id})">ویرایش</button> <button class="btn ghost sm" onclick="del('teachers',${t.id})">حذف</button></td></tr>`).join('') || '<tr><td colspan="7" class="muted">هنوز دبیری ثبت نشده. روی «دبیر جدید» بزنید.</td></tr>';
+}
+function editTeacher(id) {
+  const t = teachers.find(x => x.id === id) || { name: '', subject: '', username: '', password: '1234', color: COLORS[teachers.length % COLORS.length] };
+  openModal(`<h2>${id ? 'ویرایش' : 'افزودن'} دبیر</h2>
+    <div class="field"><label>نام</label><input id="m-name" value="${esc(t.name)}" autofocus></div>
+    <div class="field"><label>درس</label><input id="m-subject" value="${esc(t.subject)}"></div>
+    <div class="grid2"><div class="field"><label>نام کاربری (انگلیسی)</label><input id="m-user" dir="ltr" value="${esc(t.username)}"></div><div class="field"><label>رمز</label><input id="m-pass" dir="ltr" value="${esc(t.password)}"></div></div>
+    <div class="field"><label><input type="checkbox" id="m-admin" ${t.is_admin ? 'checked' : ''} style="width:auto;vertical-align:middle"> دسترسی مدیر (می‌تواند همه چیز را ببیند و ویرایش کند)</label></div>
+    <div class="field"><label>رنگ در برنامه</label><div class="row">${COLORS.map(c => `<span class="colorbox ${c === t.color ? 'sel' : ''}" style="background:${c}" onclick="$('#m-color').value='${c}';$$('.colorbox').forEach(b=>b.classList.remove('sel'));this.classList.add('sel')"></span>`).join('')}<input type="hidden" id="m-color" value="${t.color}"></div></div>
+    <div class="row" style="justify-content:flex-end"><button class="btn ghost" onclick="closeModal()">انصراف</button><button class="btn" onclick="saveTeacher(${id || 0})">ذخیره</button></div>`);
+}
+async function saveTeacher(id) {
+  const body = { name: $('#m-name').value.trim(), subject: $('#m-subject').value.trim(), username: $('#m-user').value.trim() || null, password: $('#m-pass').value, color: $('#m-color').value, is_admin: $('#m-admin').checked ? 1 : 0 };
+  if (!body.name) return toast('نام لازم است', 'bad');
+  try { if (id) await api('/api/teachers/' + id, 'PUT', body); else await api('/api/teachers', 'POST', body); closeModal(); toast('ذخیره شد', 'ok'); loadAll(); }
+  catch (e) { toast(e.message.includes('UNIQUE') ? 'این نام کاربری قبلاً استفاده شده' : e.message, 'bad'); }
+}
+
+/* ================= STUDENTS ================= */
+function renderStudents() {
+  const q = $('#s-q').value.trim();
+  const list = students.filter(s => !q || s.name.includes(q));
+  $('#s-table').innerHTML = `<tr><th>#</th><th>نام</th><th>مدرسه</th><th>وضعیت</th><th>کلاس‌ها</th><th></th></tr>` + list.map((s, i) => `<tr style="${s.active ? '' : 'opacity:.5'}">
+    <td>${fa(i + 1)}</td><td><b>${esc(s.name)}</b></td><td>${esc(schoolName(s.school_id)) || '<span class="muted">—</span>'}</td><td>${s.active ? '<span class="chip">فعال</span>' : `<span class="chip" style="background:#fee2e2">${esc(s.note || 'غیرفعال')}</span>`}</td>
+    <td>${classes.filter(c => c.student_ids.includes(s.id)).map(c => `<span class="chip" style="background:${c.teacher_color}22;border-color:${c.teacher_color}55">${meta.days[c.day]} ${fa(c.start)} ${esc(c.teacher_name || '')}</span>`).join(' ')}</td>
+    <td><button class="btn ghost sm" onclick="editStudent(${s.id})">ویرایش</button> <button class="btn ghost sm" onclick="del('students',${s.id})">حذف</button></td></tr>`).join('');
+}
+$('#s-q').oninput = renderStudents;
+function editStudent(id) {
+  const s = students.find(x => x.id === id) || { name: '', school_id: null, note: '', active: 1 };
+  openModal(`<h2>${id ? 'ویرایش' : 'افزودن'} دانش‌آموز</h2>
+    <div class="field"><label>نام</label><input id="m-name" value="${esc(s.name)}" autofocus></div>
+    <div class="field"><label>مدرسه</label><select id="m-school"><option value="">—</option>${schools.map(x => `<option value="${x.id}" ${x.id === s.school_id ? 'selected' : ''}>${esc(x.name)}</option>`).join('')}</select></div>
+    <div class="grid2"><div class="field"><label>وضعیت</label><select id="m-active"><option value="1" ${s.active ? 'selected' : ''}>فعال</option><option value="0" ${!s.active ? 'selected' : ''}>غیرفعال</option></select></div><div class="field"><label>توضیح</label><input id="m-note" value="${esc(s.note)}"></div></div>
+    <div class="row" style="justify-content:flex-end"><button class="btn ghost" onclick="closeModal()">انصراف</button><button class="btn" onclick="saveStudent(${id || 0})">ذخیره</button></div>`);
+}
+async function saveStudent(id) {
+  const body = { name: $('#m-name').value.trim(), school_id: +$('#m-school').value || null, note: $('#m-note').value, active: +$('#m-active').value };
+  if (!body.name) return toast('نام لازم است', 'bad');
+  if (id) await api('/api/students/' + id, 'PUT', body); else await api('/api/students', 'POST', body);
+  closeModal(); toast('ذخیره شد', 'ok'); loadAll();
+}
+
+/* ================= SCHOOLS ================= */
+function renderSchools() {
+  $('#sc-table').innerHTML = `<tr><th>نام</th><th>دانش‌آموزان</th><th>کلاس‌ها</th><th></th></tr>` + schools.map(s => `<tr><td><b>${esc(s.name)}</b></td><td>${fa(students.filter(x => x.school_id === s.id).length)}</td><td>${fa(classes.filter(c => c.school_id === s.id).length)}</td>
+    <td><button class="btn ghost sm" onclick="editSchool(${s.id})">ویرایش</button> <button class="btn ghost sm" onclick="del('schools',${s.id})">حذف</button></td></tr>`).join('');
+}
+function editSchool(id) {
+  const s = schools.find(x => x.id === id) || { name: '' };
+  openModal(`<h2>${id ? 'ویرایش' : 'افزودن'} مدرسه</h2><div class="field"><label>نام</label><input id="m-name" value="${esc(s.name)}" autofocus></div>
+    <div class="row" style="justify-content:flex-end"><button class="btn ghost" onclick="closeModal()">انصراف</button><button class="btn" onclick="saveSchool(${id || 0})">ذخیره</button></div>`);
+}
+async function saveSchool(id) {
+  const body = { name: $('#m-name').value.trim() }; if (!body.name) return;
+  if (id) await api('/api/schools/' + id, 'PUT', body); else await api('/api/schools', 'POST', body);
+  closeModal(); toast('ذخیره شد', 'ok'); loadAll();
+}
+async function del(table, id) { if (!confirm('حذف شود؟')) return; await api(`/api/${table}/${id}`, 'DELETE'); toast('حذف شد'); loadAll(); }
+
+/* ================= REPORTS ================= */
+let REPS = [];
+const attSummary = r => { const v = Object.values(r.attendance || {}); if (!v.length) return ''; return `حاضر ${fa(v.filter(x => x === 'p').length)} · غایب ${fa(v.filter(x => x === 'a').length)}${v.includes('l') ? ' · تأخیر ' + fa(v.filter(x => x === 'l').length) : ''}`; };
+function repCard(r) {
+  const absent = Object.entries(r.attendance || {}).filter(([, v]) => v !== 'p').map(([id, v]) => { const s = students.find(x => x.id === +id); return s ? `${s.name} (${v === 'a' ? 'غایب' : 'تأخیر'})` : ''; }).filter(Boolean);
+  return `<div class="rep" style="border-color:${(teacherById(r.teacher_id) || {}).color || '#888'}">
+    <div class="h"><b>${esc(r.teacher_name || '')} · ${faDate(r.date)} ${r.day != null ? '· ' + meta.days[r.day] : ''} ${r.class_title || r.school_name ? '· ' + esc(r.class_title || r.school_name) : ''}</b>
+      <span class="muted" style="font-size:12px">⏱ ${fa(r.check_in || '—')} تا ${fa(r.check_out || '—')}${r.hours ? ' (' + fa(r.hours) + ' ساعت)' : ''}</span>
+      <span><button class="btn ghost sm" onclick="editReport(${r.id})">ویرایش</button> <button class="btn ghost sm" onclick="delReport(${r.id})">حذف</button> <a href="#" onclick="openTeacher(${r.teacher_id});return false" class="btn ghost sm">پرونده</a></span></div>
+    <div class="row" style="gap:6px;margin:4px 0">${r.followed_plan ? '<span class="chip" style="background:#ecfdf5;border-color:#a7f3d0">✅ طبق طرح درس</span>' : '<span class="chip" style="background:#fff7ed;border-color:#fdba74">⚠️ انحراف: ' + esc(r.plan_note || '—') + '</span>'}${r.plan_title ? `<span class="chip">📘 ${esc(r.plan_title)}</span>` : ''}${attSummary(r) ? `<span class="chip" title="${esc(absent.join('، '))}">${attSummary(r)}</span>` : ''}</div>
+    ${absent.length ? `<div class="lbl">غایب / تأخیر</div><div class="body">${esc(absent.join('، '))}</div>` : ''}
+    ${r.lesson_plan ? `<div class="lbl">طرح درس</div><div class="body">${esc(r.lesson_plan)}</div>` : ''}
+    ${r.done ? `<div class="lbl">انجام‌شده</div><div class="body">${esc(r.done)}</div>` : ''}
+    ${r.homework ? `<div class="lbl">تکلیف</div><div class="body">${esc(r.homework)}</div>` : ''}
+    ${r.with_whom ? `<div class="lbl">کار با</div><div class="body">${esc(r.with_whom)}</div>` : ''}
+    ${r.notes ? `<div class="lbl">یادداشت</div><div class="body">${esc(r.notes)}</div>` : ''}
+  </div>`;
+}
+async function loadReports() {
+  const q = new URLSearchParams(); if ($('#rep-teacher').value) q.set('teacher_id', $('#rep-teacher').value); if ($('#rep-from').value) q.set('from', $('#rep-from').value); if ($('#rep-to').value) q.set('to', $('#rep-to').value);
+  REPS = await api('/api/reports?' + q);
+  $('#rep-list').innerHTML = REPS.length ? REPS.map(repCard).join('') : '<p class="muted">گزارشی ثبت نشده.</p>';
+}
+function editReport(id) {
+  const r = REPS.find(x => x.id === id); if (!r) return;
+  const c = classes.find(x => x.id === r.class_id);
+  const att = r.attendance || {};
+  openModal(`<h2>ویرایش گزارش · ${esc(r.teacher_name)}</h2>
+    <div class="grid3"><div class="field"><label>تاریخ</label><input type="date" id="e-date" value="${r.date}"></div><div class="field"><label>ورود</label><input type="time" id="e-in" value="${r.check_in}"></div><div class="field"><label>خروج</label><input type="time" id="e-out" value="${r.check_out}"></div></div>
+    ${c && c.students.length ? `<label>حضور و غیاب</label><div class="row" style="gap:6px;margin-bottom:12px">${c.students.map(s => { const v = att[s.id] || 'p'; return `<label class="att-chip ${v}" data-id="${s.id}" data-v="${v}" onclick="event.preventDefault();this.dataset.v={p:'a',a:'l',l:'p'}[this.dataset.v];this.className='att-chip '+this.dataset.v;this.querySelector('b').textContent={p:'حاضر',a:'غایب',l:'تأخیر'}[this.dataset.v]">${esc(s.name)} <b>${{ p: 'حاضر', a: 'غایب', l: 'تأخیر' }[v]}</b></label>`; }).join('')}</div>` : ''}
+    <div class="field"><label>طرح درس</label><textarea id="e-plan">${esc(r.lesson_plan)}</textarea></div>
+    <div class="grid2"><div class="field"><label>طبق طرح درس؟</label><select id="e-fp"><option value="1" ${r.followed_plan ? 'selected' : ''}>بله</option><option value="0" ${!r.followed_plan ? 'selected' : ''}>خیر</option></select></div><div class="field"><label>توضیح انحراف</label><input id="e-fpn" value="${esc(r.plan_note)}"></div></div>
+    <div class="field"><label>انجام‌شده</label><textarea id="e-done">${esc(r.done)}</textarea></div>
+    <div class="field"><label>تکلیف</label><textarea id="e-hw" style="min-height:50px">${esc(r.homework)}</textarea></div>
+    <div class="grid2"><div class="field"><label>کار با</label><input id="e-with" value="${esc(r.with_whom)}"></div><div class="field"><label>یادداشت</label><input id="e-notes" value="${esc(r.notes)}"></div></div>
+    <div class="row" style="justify-content:flex-end"><button class="btn ghost" onclick="closeModal()">انصراف</button><button class="btn" onclick="saveReport(${id})">ذخیره</button></div>`);
+}
+async function saveReport(id) {
+  const att = {}; $$('#overlay .att-chip').forEach(el => att[el.dataset.id] = el.dataset.v);
+  await api('/api/reports/' + id, 'PUT', { date: $('#e-date').value, check_in: $('#e-in').value, check_out: $('#e-out').value, attendance: att, lesson_plan: $('#e-plan').value, followed_plan: +$('#e-fp').value, plan_note: $('#e-fpn').value, done: $('#e-done').value, homework: $('#e-hw').value, with_whom: $('#e-with').value, notes: $('#e-notes').value });
+  closeModal(); toast('ذخیره شد', 'ok'); loadReports();
+}
+async function delReport(id) { if (!confirm('این گزارش حذف شود؟')) return; await api('/api/reports/' + id, 'DELETE'); toast('حذف شد'); loadReports(); }
+
+/* ================= PLANS ================= */
+let PLANS = [];
+async function loadPlans() {
+  PLANS = await api('/api/plans');
+  $('#plan-list').innerHTML = PLANS.length ? PLANS.map(p => `<div class="rep" style="border-color:${(teacherById(p.teacher_id) || {}).color || '#0ea5e9'}">
+    <div class="h"><b>📘 ${esc(p.title)}</b><span class="chip">${p.teacher_name ? esc(p.teacher_name) : 'همه دبیران'}</span><span><button class="btn ghost sm" onclick="editPlan(${p.id})">ویرایش</button> <button class="btn ghost sm" onclick="delPlan(${p.id})">حذف</button></span></div>
+    ${p.content ? `<div class="body">${esc(p.content)}</div>` : ''}
+    ${p.file_name ? `<div style="margin-top:6px"><a class="btn ghost sm" href="/files/${p.id}">⬇️ ${esc(p.file_name)}</a></div>` : ''}
+  </div>`).join('') : '<p class="muted">هنوز طرح درسی ثبت نشده.</p>';
+}
+function editPlan(id) {
+  const p = PLANS.find(x => x.id === id) || { teacher_id: null, title: '', content: '' };
+  openModal(`<h2>${id ? 'ویرایش' : 'افزودن'} طرح درس</h2>
+    <div class="field"><label>برای</label><select id="pl-teacher"><option value="">همه دبیران</option>${teachers.map(t => `<option value="${t.id}" ${t.id === p.teacher_id ? 'selected' : ''}>${esc(t.name)}</option>`).join('')}</select></div>
+    <div class="field"><label>عنوان</label><input id="pl-title" value="${esc(p.title)}" placeholder="مثلاً رباتیک مقدماتی – جلسه ۱ تا ۴"></div>
+    <div class="field"><label>متن طرح درس</label><textarea id="pl-content" style="min-height:140px">${esc(p.content)}</textarea></div>
+    ${id ? '' : '<div class="field"><label>فایل (اختیاری: PDF، Word، PowerPoint، عکس، zip تا ۲۰ مگابایت)</label><input type="file" id="pl-file" accept=".pdf,.doc,.docx,.ppt,.pptx,.xls,.xlsx,.txt,.png,.jpg,.jpeg,.zip,.mp4"></div>'}
+    <div class="row" style="justify-content:flex-end"><button class="btn ghost" onclick="closeModal()">انصراف</button><button class="btn" id="pl-save" onclick="savePlan(${id || 0})">ذخیره</button></div>`);
+}
+async function savePlan(id) {
+  const body = { teacher_id: +$('#pl-teacher').value || null, title: $('#pl-title').value.trim(), content: $('#pl-content').value };
+  if (!body.title) return toast('عنوان لازم است', 'bad');
+  const f = $('#pl-file')?.files?.[0];
+  if (f) { if (f.size > 20 * 1024 * 1024) return toast('فایل بزرگ‌تر از ۲۰ مگابایت است', 'bad'); $('#pl-save').disabled = true; $('#pl-save').textContent = 'در حال آپلود...'; body.file = { name: f.name, data: await new Promise(r => { const fr = new FileReader(); fr.onload = () => r(fr.result.split(',')[1]); fr.readAsDataURL(f); }) }; }
+  try { if (id) await api('/api/plans/' + id, 'PUT', body); else await api('/api/plans', 'POST', body); closeModal(); toast('ذخیره شد', 'ok'); loadPlans(); }
+  catch (e) { toast(e.message, 'bad'); $('#pl-save').disabled = false; $('#pl-save').textContent = 'ذخیره'; }
+}
+async function delPlan(id) { if (!confirm('حذف شود؟')) return; await api('/api/plans/' + id, 'DELETE'); loadPlans(); }
+
+/* ================= PAYROLL ================= */
+const money = n => fa((+n || 0).toLocaleString('en'));
+async function loadPayroll() {
+  if (!$('#pay-from').value) { const d = new Date(); $('#pay-to').value = todayISO(); d.setDate(1); $('#pay-from').value = d.toISOString().slice(0, 10); }
+  const rows = await api(`/api/payroll?from=${$('#pay-from').value}&to=${$('#pay-to').value}`);
+  const pays = await api('/api/payments');
+  $('#pay-table').innerHTML = `<tr><th>دبیر</th><th>نرخ هر روز</th><th>نرخ هر جلسه</th><th>نرخ هر ساعت</th><th>روز</th><th>جلسه</th><th>ساعت</th><th>حقوق محاسبه‌شده</th><th>پرداخت‌شده</th><th></th></tr>` + rows.map(r => `<tr>
+    <td><b><span class="dot" style="background:${r.color}"></span>${esc(r.name)}</b></td>
+    <td><input class="rate" type="number" value="${r.rate_fixed}" onchange="setRate(${r.teacher_id},'rate_fixed',this.value)"></td>
+    <td><input class="rate" type="number" value="${r.rate_session}" onchange="setRate(${r.teacher_id},'rate_session',this.value)"></td>
+    <td><input class="rate" type="number" value="${r.rate_hour}" onchange="setRate(${r.teacher_id},'rate_hour',this.value)"></td>
+    <td>${fa(r.days)}</td><td>${fa(r.sessions)}</td><td>${fa(r.hours)}</td>
+    <td><b>${money(r.amount)}</b></td><td>${money(r.paid)}</td>
+    <td><button class="btn sm" onclick="addPayment(${r.teacher_id},${r.amount - r.paid})">ثبت پرداخت</button> <a href="#" class="btn ghost sm" onclick="openTeacher(${r.teacher_id});return false">پرونده</a></td></tr>`).join('') + `<tr><td colspan="7"><b>جمع</b></td><td><b>${money(rows.reduce((a, r) => a + r.amount, 0))}</b></td><td>${money(rows.reduce((a, r) => a + r.paid, 0))}</td><td></td></tr>`;
+  $('#paid-table').innerHTML = `<tr><th>دبیر</th><th>بازه</th><th>مبلغ</th><th>توضیح</th><th>ثبت</th><th></th></tr>` + (pays.map(p => `<tr><td>${esc(p.teacher_name)}</td><td>${faDate(p.period_from)} تا ${faDate(p.period_to)}</td><td>${money(p.amount)}</td><td>${esc(p.note)}</td><td>${faDate(p.created_at)}</td><td><button class="btn ghost sm" onclick="delPayment(${p.id})">حذف</button></td></tr>`).join('') || '<tr><td colspan="6" class="muted">پرداختی ثبت نشده</td></tr>');
+}
+async function setRate(tid, key, val) { await api('/api/teachers/' + tid, 'PUT', { [key]: +val || 0 }); teachers = await api('/api/teachers'); loadPayroll(); toast('نرخ ذخیره شد', 'ok'); }
+function addPayment(tid, suggested) {
+  openModal(`<h2>ثبت پرداخت · ${esc(teacherById(tid)?.name || '')}</h2>
+    <div class="grid2"><div class="field"><label>از</label><input type="date" id="pm-from" value="${$('#pay-from').value}"></div><div class="field"><label>تا</label><input type="date" id="pm-to" value="${$('#pay-to').value}"></div></div>
+    <div class="field"><label>مبلغ (تومان)</label><input type="number" id="pm-amount" value="${Math.max(0, suggested)}"></div>
+    <div class="field"><label>توضیح</label><input id="pm-note" placeholder="مثلاً: حقوق مهر، کارت به کارت"></div>
+    <div class="row" style="justify-content:flex-end"><button class="btn ghost" onclick="closeModal()">انصراف</button><button class="btn" onclick="savePayment(${tid})">ثبت</button></div>`);
+}
+async function savePayment(tid) { await api('/api/payments', 'POST', { teacher_id: tid, period_from: $('#pm-from').value, period_to: $('#pm-to').value, amount: +$('#pm-amount').value, note: $('#pm-note').value }); closeModal(); toast('پرداخت ثبت شد', 'ok'); loadPayroll(); }
+async function delPayment(id) { if (!confirm('حذف شود؟')) return; await api('/api/payments/' + id, 'DELETE'); loadPayroll(); }
+$('#rep-teacher').onchange = loadReports;
+
+/* ================= SETTINGS ================= */
+async function saveSlots() { await api('/api/meta/slots', 'PUT', { slots: $('#set-slots').value.split('\n').map(s => s.trim()).filter(s => /^\d{1,2}:\d{2}-\d{1,2}:\d{2}$/.test(s)) }); toast('ذخیره شد', 'ok'); loadAll(); }
+async function saveTerm() { await api('/api/meta/term', 'PUT', { term_start: $('#set-term').value, classes_start: $('#set-cstart').value, term_end: $('#set-end').value }); toast('ذخیره شد', 'ok'); loadAll(); }
+async function loadTg() {
+  const st = await api('/api/telegram/status');
+  $('#tg-bot').value = st.bot || ''; $('#tg-admin').value = st.admin || ''; $('#tg-base').value = st.base || ''; $('#tg-token').placeholder = st.token ? '(توکن ذخیره شده؛ برای تغییر تایپ کنید)' : '123456:ABC...';
+  $('#tg-status').innerHTML = `${st.polling ? '🟢 ربات فعال' : '⚪ ربات غیرفعال'}${st.lastError ? ` · ⚠️ ${esc(st.lastError)}` : ''}<br>مدیر وصل: ${st.admin_linked ? '✅' : '❌ (مدیر باید به ربات /start بزند)'} · دبیران وصل‌شده: ${fa(st.linked_teachers)} — ${st.teachers.filter(t => t.linked).map(t => esc(t.name)).join('، ') || 'هیچ'}`;
+}
+async function saveTg() { const b = { tg_bot_username: $('#tg-bot').value.trim(), tg_admin: $('#tg-admin').value.trim().replace('@', ''), tg_api_base: $('#tg-base').value.trim() }; if ($('#tg-token').value.trim()) b.tg_token = $('#tg-token').value.trim(); await api('/api/telegram/settings', 'PUT', b); $('#tg-token').value = ''; toast('ذخیره شد', 'ok'); loadTg(); }
+async function testTg() { try { const r = await api('/api/telegram/test', 'POST'); toast(r.ok ? `✅ متصل: @${r.result.username}` : '❌ ' + (r.description || 'خطا'), r.ok ? 'ok' : 'bad'); } catch (e) { toast(e.message, 'bad'); } }
+async function savePass() { const p = $('#set-pass').value; if (!p) return; await api('/api/meta/admin-password', 'PUT', { password: p }); $('#set-pass').value = ''; toast('رمز تغییر کرد', 'ok'); }
+
+api('/api/me').then(u => { if (!u) location.href = '/'; else if (u.role !== 'admin') location.href = '/teacher.html'; else { $('#uname').textContent = u.name; if (u.teacher_id) $('#teacher-link').style.display = ''; loadAll(); } });
+</script>
+</body>
+</html>

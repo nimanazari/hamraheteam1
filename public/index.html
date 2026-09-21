@@ -1,0 +1,35 @@
+<!DOCTYPE html>
+<html lang="fa" dir="rtl">
+<head>
+<meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>ورود | برنامه هفتگی</title>
+<link rel="stylesheet" href="/style.css">
+</head>
+<body>
+<div class="login">
+  <div class="card">
+    <div class="logo">📅</div>
+    <h1>برنامه هفتگی مدارس</h1>
+    <p class="muted" style="text-align:center;margin-top:-4px">ورود مدیر یا دبیر</p>
+    <form id="f">
+      <div class="field"><label>نام کاربری</label><input name="username" autocomplete="username" required autofocus></div>
+      <div class="field"><label>رمز عبور</label><input name="password" type="password" autocomplete="current-password" required></div>
+      <button class="btn" style="width:100%;justify-content:center">ورود</button>
+      <p id="err" style="color:var(--bad);text-align:center;min-height:20px;margin:10px 0 0"></p>
+    </form>
+  </div>
+</div>
+<script src="/common.js"></script>
+<script>
+api('/api/me').then(u => { if (u) location.href = u.role === 'admin' ? '/admin.html' : '/teacher.html'; });
+$('#f').onsubmit = async e => {
+  e.preventDefault();
+  const fd = new FormData(e.target);
+  try {
+    const u = await api('/api/login', 'POST', { username: fd.get('username'), password: fd.get('password') });
+    location.href = u.role === 'admin' ? '/admin.html' : '/teacher.html';
+  } catch (err) { $('#err').textContent = err.message; }
+};
+</script>
+</body>
+</html>
