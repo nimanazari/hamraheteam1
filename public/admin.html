@@ -208,7 +208,7 @@ async function loadAll() {
   ['#f-school', '#pool-school'].forEach(s => { const v = $(s).value; $(s).innerHTML = '<option value="">همه مدارس</option>' + sOpts; $(s).value = v; });
   if (ME && !ME.main) { $$('#v-settings .card').forEach(c => { if (/^رمز مدیر|تلگرام/.test(c.querySelector('h3')?.textContent || '')) c.style.display = 'none'; }); }
   renderPerms(); renderColors();
-  $('#set-slots').value = meta.slots.join('\n'); $('#set-term').value = meta.term_start; $('#set-cstart').value = meta.classes_start; $('#set-end').value = meta.term_end; $('#set-cmode').value = meta.color_mode || 'teacher'; $('#set-g0').value = meta.grid_start || '07:30'; $('#set-g1').value = meta.grid_end || '19:00'; ['#set-term', '#set-cstart', '#set-end', '#pay-from', '#pay-to', '#rep-from', '#rep-to'].forEach(id => { const el = $(id); if (el && !el._j) jalaliInput(el); else if (el) el._j.value = jStr(el.value); }); updateBadge();
+  $('#set-slots').value = meta.slots.join('\n'); $('#set-term').value = meta.term_start; $('#set-cstart').value = meta.classes_start; $('#set-end').value = meta.term_end; $('#set-cmode').value = meta.color_mode || 'teacher'; $('#set-g0').value = meta.grid_start || '07:30'; $('#set-g1').value = meta.grid_end || '21:00'; ['#set-term', '#set-cstart', '#set-end', '#pay-from', '#pay-to', '#rep-from', '#rep-to'].forEach(id => { const el = $(id); if (el && !el._j) jalaliInput(el); else if (el) el._j.value = jStr(el.value); }); updateBadge();
   renderBoard(); renderPool(); renderTeachers(); renderStudents(); renderSchools(); refreshUndo();
   if ($('#v-calendar').classList.contains('active')) renderCal();
 }
@@ -224,7 +224,7 @@ function renderBoard() {
   $('#filter-bar').innerHTML = (ft || fs || fq) ? `🔎 فقط ${fq ? 'موارد شامل «<b>' + esc(fq) + '</b>»' : ''} ${ft ? 'دبیر <b>' + esc(teacherById(ft)?.name || '') + '</b>' : ''} ${fs ? 'محل <b>' + esc(schoolName(fs)) + '</b>' : ''} نمایش داده می‌شود <button class="btn ghost sm" onclick="$('#f-teacher').value='';$('#f-school').value='';$('#f-q').value='';renderBoard()">✕ نمایش همه</button>` : '';
   $('#stats').innerHTML = [['📚', classes.length, 'کلاس در هفته'], ['👩‍🏫', teachers.length, 'دبیر'], ['🎒', students.filter(s => s.active).length, 'دانش‌آموز فعال'], ['🏫', schools.length, 'مدرسه']].map(([i, n, l]) => `<div class="stat"><i>${i}</i><div><b>${fa(n)}</b><span>${l}</span></div></div>`).join('');
   const M = t => +t.slice(0, 2) * 60 + +t.slice(3);
-  const g0 = M(meta.grid_start || '07:30'), g1 = M(meta.grid_end || '19:00'), span = Math.max(60, g1 - g0);
+  const g0 = M(meta.grid_start || '07:30'), g1 = M(meta.grid_end || '21:00'), span = Math.max(60, g1 - g0);
   // hour axis
   let axis = '';
   const F = m => fa(`${String(Math.floor(m / 60)).padStart(2, '0')}:${String(m % 60).padStart(2, '0')}`);
@@ -425,7 +425,7 @@ function bindDrops() {
   $$('.drop-day').forEach(col => {
     col.ondragover = e => { e.preventDefault(); col.classList.add('over'); };
     col.ondragleave = () => col.classList.remove('over');
-    col.ondrop = e => { if (!e._forwarded) { e.preventDefault(); e.stopPropagation(); } col.classList.remove('over'); const inner = col.querySelector('.col-in'); const r = inner.getBoundingClientRect(); const M = t => +t.slice(0, 2) * 60 + +t.slice(3); const g0 = M(meta.grid_start || '07:30'), g1 = M(meta.grid_end || '19:00'); let mins = g0 + Math.max(0, Math.min(1, (e.clientY - r.top) / r.height)) * (g1 - g0); mins = Math.round(mins / 30) * 30; const at = `${String(Math.floor(mins / 60)).padStart(2, '0')}:${String(mins % 60).padStart(2, '0')}`; handleDrop(JSON.parse(e.dataTransfer.getData('text/plain')), { day: +col.dataset.day, at }); };
+    col.ondrop = e => { if (!e._forwarded) { e.preventDefault(); e.stopPropagation(); } col.classList.remove('over'); const inner = col.querySelector('.col-in'); const r = inner.getBoundingClientRect(); const M = t => +t.slice(0, 2) * 60 + +t.slice(3); const g0 = M(meta.grid_start || '07:30'), g1 = M(meta.grid_end || '21:00'); let mins = g0 + Math.max(0, Math.min(1, (e.clientY - r.top) / r.height)) * (g1 - g0); mins = Math.round(mins / 30) * 30; const at = `${String(Math.floor(mins / 60)).padStart(2, '0')}:${String(mins % 60).padStart(2, '0')}`; handleDrop(JSON.parse(e.dataTransfer.getData('text/plain')), { day: +col.dataset.day, at }); };
     col.onclick = e => { if (picked && !e.target.closest('.cls')) { const p = picked; unpick(); handleDrop(p, { day: +col.dataset.day }); } };
   });
   $$('.drop-cls').forEach(card => {
@@ -555,7 +555,7 @@ function startDragTime(e, id, mode) {
   e.preventDefault(); e.stopPropagation();
   const c = classes.find(x => x.id === id); const card = e.target.closest('.cls'); const colIn = card.closest('.col-in'); const r = colIn.getBoundingClientRect();
   const M = t => +t.slice(0, 2) * 60 + +t.slice(3), F = m => `${String(Math.floor(m / 60)).padStart(2, '0')}:${String(m % 60).padStart(2, '0')}`;
-  const g0 = M(meta.grid_start || '07:30'), g1 = M(meta.grid_end || '19:00'), span = g1 - g0, dur = M(c.end) - M(c.start);
+  const g0 = M(meta.grid_start || '07:30'), g1 = M(meta.grid_end || '21:00'), span = g1 - g0, dur = M(c.end) - M(c.start);
   card.draggable = false; card.classList.add('dragging-time');
   const lbl = card.querySelector('.edit-line[data-edit=slot]');
   let st = M(c.start), en = M(c.end);
