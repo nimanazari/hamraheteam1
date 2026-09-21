@@ -47,7 +47,7 @@
           </div>
           <input id="pool-q" placeholder="جستجو..." style="margin:8px 0">
           <select id="pool-school" style="margin-bottom:8px"><option value="">همه مدارس</option></select>
-          <p class="muted" style="font-size:11px;margin:0 0 6px;line-height:1.5">دانش‌آموز را روی نام دبیر رها کنید تا به لیست او اضافه شود. دبیر را روی روز بیندازید تا کلاسش با همان لیست ساخته شود. روی موبایل: اول روی نام بزنید، بعد روی مقصد.</p>
+          <p class="muted" style="font-size:11px;margin:0 0 6px;line-height:1.5">دانش‌آموز را روی نام دبیر رها کنید تا به لیست او اضافه شود. دبیر را روی روز بیندازید تا کلاسش با همان لیست ساخته شود. برای بردن به روز دیگر، خود کارت را بکشید. دابل‌کلیک روی نام دبیر: پرونده‌اش.</p>
           <div class="pool" id="pool"></div>
         </div>
       </div>
@@ -139,6 +139,7 @@ const TYPE_ICON = { public: '🏫', robotic: '🤖', private: '👤' };
 const needsStudents = c => c.type !== 'public';
 const cardWarn = c => c.type === 'public' ? (!c.school_id ? 'مدرسه را انتخاب کنید' : '') : (!c.students.length ? 'دانش‌آموز اضافه کنید' : '');
 let picked = null; // {type, id} for tap-to-place on touch devices
+const TOUCH = matchMedia('(pointer: coarse)').matches;
 
 const nav = v => { $$('.nav[data-v]').forEach(n => n.classList.toggle('active', n.dataset.v === v)); $$('.view').forEach(s => s.classList.toggle('active', s.id === 'v-' + v)); if (v === 'plans') loadPlans(); if (v === 'payroll') loadPayroll(); if (v === 'settings') loadTg(); if (v === 'reports') { loadReports(); localStorage.setItem('seenRep', window._maxRep || 0); $('#rep-badge').style.display = 'none'; } if (v === 'calendar') renderCal(); };
 $$('.nav[data-v]').forEach(n => n.onclick = () => nav(n.dataset.v));
@@ -213,6 +214,7 @@ $$('.pt').forEach(p => p.onclick = () => { poolTab = p.dataset.p; $$('.pt').forE
 
 // tap-to-place fallback (touch)
 function pick(item) {
+  if (!TOUCH) return; // desktop: drag only, clicks never move anything
   picked = item;
   const bar = $('#pick-bar');
   bar.innerHTML = `<span>✋ <b>${esc(item.name)}</b> انتخاب شد. حالا روی یک روز یا کلاس بزنید.</span><button class="btn ghost sm" onclick="unpick()">لغو</button>`;
@@ -416,12 +418,14 @@ function newOnDay(day) {
     <div class="grid2"><div class="field"><label>دبیر</label><select id="n-teacher"><option value="">— بعداً —</option>${teachers.map(t => `<option value="${t.id}">${esc(t.name)}</option>`).join('')}</select></div>
     <div class="field"><label>نوع</label><select id="n-type">${Object.entries(TYPES).map(([k, v]) => `<option value="${k}">${TYPE_ICON[k]} ${v}</option>`).join('')}</select></div>
     <div class="field"><label>مدرسه / محل</label><select id="n-school"><option value="">—</option>${schools.map(x => `<option value="${x.id}">${esc(x.name)}</option>`).join('')}</select></div>
-    <div class="field"><label>بازه</label><select id="n-slot">${meta.slots.map(x => `<option value="${x}">${fa(x.replace('-', ' تا '))}</option>`).join('')}</select></div></div>
+    <div class="field"><label>ساعت (آزاد)</label><div class="row" style="gap:6px;flex-wrap:nowrap"><input type="time" id="n-start" value="${(meta.slots[0] || '10:00-12:00').split('-')[0]}" step="300"><span>تا</span><input type="time" id="n-end" value="${(meta.slots[0] || '10:00-12:00').split('-')[1]}" step="300"></div>
+      <div class="row" style="gap:4px;margin-top:6px">${meta.slots.map(x => `<button type="button" class="btn ghost sm" onclick="const [a,b]='${x}'.split('-');$('#n-start').value=a;$('#n-end').value=b">${fa(x.replace('-', '–'))}</button>`).join('')}</div></div></div>
     <div class="field"><label>عنوان (اختیاری)</label><input id="n-title"></div>
     <div class="row" style="justify-content:flex-end"><button class="btn ghost" onclick="closeModal()">انصراف</button><button class="btn" onclick="createOnDay(${day})">ساختن</button></div>`);
 }
 async function createOnDay(day) {
-  const [start, end] = $('#n-slot').value.split('-'); const tid = +$('#n-teacher').value || null;
+  const start = $('#n-start').value, end = $('#n-end').value; const tid = +$('#n-teacher').value || null;
+  if (!start || !end || start >= end) return toast('ساعت پایان باید بعد از شروع باشد', 'bad');
   const body = { type: $('#n-type').value, title: $('#n-title').value.trim(), teacher_id: tid, school_id: +$('#n-school').value || null, day, start, end, note: '', student_ids: $('#n-type').value === 'public' ? [] : [...(teacherById(tid)?.student_ids || [])] };
   try { await saveWithConfirm(body); closeModal(); toast('کلاس ساخته شد', 'ok'); reloadClasses(); } catch (e) { if (e.message !== 'cancel') toast(e.message, 'bad'); }
 }
@@ -471,8 +475,8 @@ function openClass(id) {
       <div class="field"><label>عنوان</label><input id="m-title" value="${esc(c.title)}" placeholder="مثلاً ریاضی هفتم"></div>
       <div class="field"><label>نوع کلاس</label><select id="m-type">${Object.entries(TYPES).map(([k, v]) => `<option value="${k}" ${k === (c.type || 'robotic') ? 'selected' : ''}>${TYPE_ICON[k]} ${v}</option>`).join('')}</select></div>
       <div class="field"><label>روز</label><select id="m-day">${meta.days.map((d, i) => `<option value="${i}" ${i === c.day ? 'selected' : ''}>${d}</option>`).join('')}</select></div>
-      <div class="field"><label>بازه</label><select id="m-slot" onchange="$('#m-custom').style.display=this.value==='custom'?'':'none'">${meta.slots.map(s => `<option value="${s}" ${s === slot ? 'selected' : ''}>${fa(s.replace('-', ' تا '))}</option>`).join('')}<option value="custom" ${custom ? 'selected' : ''}>ساعت دلخواه...</option></select></div>
-      <div class="field" id="m-custom" style="${custom ? '' : 'display:none'}"><label>از / تا</label><div class="row" style="gap:6px;flex-wrap:nowrap"><input type="time" id="m-start" value="${c.start}"><input type="time" id="m-end" value="${c.end}"></div></div>
+      <div class="field"><label>ساعت (آزاد)</label><div class="row" style="gap:6px;flex-wrap:nowrap"><input type="time" id="m-start" value="${c.start}" step="300"><span>تا</span><input type="time" id="m-end" value="${c.end}" step="300"></div></div>
+      <div class="field"><label>میان‌بر</label><div class="row" style="gap:4px">${meta.slots.map(x => `<button type="button" class="btn ghost sm" onclick="const [a,b]='${x}'.split('-');$('#m-start').value=a;$('#m-end').value=b">${fa(x.replace('-', '–'))}</button>`).join('')}</div></div>
     </div>
     <div class="field"><label>یادداشت</label><input id="m-note" value="${esc(c.note)}"></div>
     <label>دانش‌آموزان (<span id="m-count">${fa(c.students.length)}</span>)</label>
@@ -495,7 +499,7 @@ function renderMembers() {
 async function saveModal() {
   const b = M.body;
   b.type = $('#m-type').value; b.teacher_id = +$('#m-teacher').value || null; b.school_id = +$('#m-school').value || null; b.title = $('#m-title').value.trim(); b.day = +$('#m-day').value; b.note = $('#m-note').value;
-  if ($('#m-slot').value === 'custom') { b.start = $('#m-start').value; b.end = $('#m-end').value; } else [b.start, b.end] = $('#m-slot').value.split('-');
+  b.start = $('#m-start').value; b.end = $('#m-end').value;
   if (!b.start || !b.end || b.start >= b.end) return toast('بازه زمانی نامعتبر است', 'bad');
   try { await saveWithConfirm(b, M.id); closeModal(); toast('ذخیره شد ✅', 'ok'); reloadClasses(); }
   catch (e) { if (e.message !== 'cancel') toast(e.message, 'bad'); }
