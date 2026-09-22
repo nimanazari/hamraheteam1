@@ -399,7 +399,7 @@ setInterval(updateBadge, 60000);
 let lastVer = null, dragging = false;
 document.addEventListener('dragstart', () => dragging = true); document.addEventListener('dragend', () => dragging = false);
 setInterval(async () => {
-  if (!ME || !$('#v-board').classList.contains('active') || dragging || $('#overlay').classList.contains('show') || document.querySelector('.inline-ed')) return;
+  if (!ME || !$('#v-board').classList.contains('active') || dragging || undoBusy || $('#overlay').classList.contains('show') || document.querySelector('.inline-ed') || document.body.classList.contains('grabbing')) return;
   try { const { v } = await api('/api/classes/version'); if (lastVer && v !== lastVer) { [classes, schools, teachers] = await Promise.all([api('/api/classes'), api('/api/schools'), api('/api/teachers')]); renderBoard(); renderPool(); refreshUndo(); } lastVer = v; } catch {}
 }, 8000);
 function bindTeacherDrops() {
@@ -582,9 +582,10 @@ async function bulk(action, from_day) {
 async function setTime(id, start, end) {
   const c = classes.find(x => x.id === id); const body = bodyOf(c); if (start) body.start = start; if (end) body.end = end;
   if (body.start >= body.end) { toast('ساعت پایان باید بعد از شروع باشد', 'bad'); return renderBoard(); }
-  try { await saveWithConfirm(body, id); await reloadClasses(); } catch (e) { renderBoard(); if (e.message !== 'cancel') toast(e.message, 'bad'); }
+  patchLocal(id, body);
+  try { await saveWithConfirm(body, id); reloadClasses(); } catch (e) { reloadClasses(); if (e.message !== 'cancel') toast(e.message, 'bad'); }
 }
-async function setClassColor(id, color) { const c = classes.find(x => x.id === id); const body = bodyOf(c); body.color = color; await api('/api/classes/' + id, 'PUT', { ...body, force: true }); await reloadClasses(); renderColors(); }
+async function setClassColor(id, color) { const c = classes.find(x => x.id === id); const body = bodyOf(c); body.color = color; patchLocal(id, body); await api('/api/classes/' + id, 'PUT', { ...body, force: true }); await reloadClasses(); renderColors(); }
 function togglePool(force) { const b = $('.board'); const open = force ?? !b.classList.contains('pool-open'); b.classList.toggle('pool-open', open); $('#pool-btn').classList.toggle('ghost', open); try { localStorage.setItem('poolOpen', open ? '1' : '0'); } catch {} }
 document.addEventListener('DOMContentLoaded', () => { try { togglePool(localStorage.getItem('poolOpen') === '1'); } catch { togglePool(false); } });
 function showCtx(e, id) {
@@ -633,8 +634,9 @@ function startCardDrag(e, card) {
     card.classList.remove('drag-src'); document.body.classList.remove('grabbing'); prev?.remove();
     if (!moved || !tgt || (tgt.day === c.day && tgt.at === c.start)) return;
     const body = bodyOf(c); body.day = tgt.day; body.start = tgt.at; body.end = HM(MIN(tgt.at) + dur);
-    try { await saveWithConfirm(body, id); await reloadClasses(); toastUndo(`${meta.days[tgt.day]} · ${fa(tgt.at)}–${fa(body.end)}`); }
-    catch (err) { renderBoard(); if (err.message !== 'cancel') toast(err.message, 'bad'); }
+    patchLocal(id, body); toastUndo(`${meta.days[tgt.day]} · ${fa(tgt.at)}–${fa(body.end)}`);
+    try { await saveWithConfirm(body, id); reloadClasses(); }
+    catch (err) { reloadClasses(); if (err.message !== 'cancel') toast(err.message, 'bad'); }
   };
   document.addEventListener('mousemove', onMove); document.addEventListener('mouseup', onUp);
 }
@@ -662,15 +664,27 @@ function startDragTime(e, id, mode) {
     document.removeEventListener('mousemove', mv); document.removeEventListener('mouseup', up); card.draggable = true; card.classList.remove('dragging-time');
     if (F(st) === c.start && F(en) === c.end) return;
     const body = bodyOf(c); body.start = F(st); body.end = F(en);
-    try { await saveWithConfirm(body, id); await reloadClasses(); toast(`ساعت شد ${fa(F(st))} تا ${fa(F(en))}`, 'ok'); } catch (err) { renderBoard(); if (err.message !== 'cancel') toast(err.message, 'bad'); }
+    patchLocal(id, body); toastUndo(`ساعت شد ${fa(F(st))} تا ${fa(F(en))}`);
+    try { await saveWithConfirm(body, id); reloadClasses(); } catch (err) { reloadClasses(); if (err.message !== 'cancel') toast(err.message, 'bad'); }
   };
   document.addEventListener('mousemove', mv); document.addEventListener('mouseup', up);
 }
 function toggleFull() { const el = $('#v-board'); if (document.fullscreenElement) document.exitFullscreen(); else el.requestFullscreen?.(); }
 document.addEventListener('click', e => { if (!e.target.closest('.cls')) $$('.cls.open').forEach(x => x.classList.remove('open')); });
 document.addEventListener('fullscreenchange', () => document.body.classList.toggle('fs', !!document.fullscreenElement));
-async function undo() { try { const r = await api('/api/undo', 'POST'); toast('↶ برگشت: ' + r.label, 'ok'); await reloadClasses(); if ($('#v-settings').classList.contains('active')) renderClassList(); } catch (e) { toast(e.message, 'bad'); } }
-async function redo() { try { const r = await api('/api/redo', 'POST'); toast('↷ تکرار: ' + r.label, 'ok'); await reloadClasses(); if ($('#v-settings').classList.contains('active')) renderClassList(); } catch (e) { toast(e.message, 'bad'); } }
+let undoBusy = false;
+async function undo() {
+  if (undoBusy) return; undoBusy = true; $('#fab-undo') && ($('#fab-undo').disabled = true);
+  try { const r = await api('/api/undo', 'POST'); classes = await api('/api/classes'); renderBoard(); renderPool(); toast('↶ برگشت: ' + r.label, 'ok'); if ($('#v-settings').classList.contains('active')) { renderClassList(); renderColors(); } }
+  catch (e) { toast(e.message === 'چیزی برای برگرداندن نیست' ? 'چیزی برای برگرداندن نیست' : e.message, 'bad'); }
+  finally { undoBusy = false; refreshUndo(); }
+}
+async function redo() {
+  if (undoBusy) return; undoBusy = true; $('#fab-redo') && ($('#fab-redo').disabled = true);
+  try { const r = await api('/api/redo', 'POST'); classes = await api('/api/classes'); renderBoard(); renderPool(); toast('↷ تکرار: ' + r.label, 'ok'); if ($('#v-settings').classList.contains('active')) { renderClassList(); renderColors(); } }
+  catch (e) { toast(e.message, 'bad'); }
+  finally { undoBusy = false; refreshUndo(); }
+}
 async function refreshUndo() { try { const s = await api('/api/snapshots'); const b = $('#btn-undo'), r = $('#btn-redo'); if (b) b.disabled = !s.canUndo; if (r) r.disabled = !s.canRedo; const fu = $('#fab-undo'), fr = $('#fab-redo'); if (fu) { fu.disabled = !s.canUndo; fr.disabled = !s.canRedo; $('#undo-fab').style.display = (s.canUndo || s.canRedo) ? '' : 'none'; } } catch {} }
 
 async function openHistory() {
@@ -695,7 +709,8 @@ function openClass(id) {
       <div class="mh-s">${TYPES[c.type] || ''}${needsStudents(c) ? ` · 🎒 ${fa(c.students.length)} دانش‌آموز` : ''}</div>
       ${needsStudents(c) && c.students.length ? `<div class="mh-chips">${c.students.map(s => `<span>${esc(s.name)}</span>`).join('')}</div>` : ''}
     </div>
-    <div class="row" style="justify-content:space-between;margin-top:14px"><h3 style="margin:0">ویرایش</h3><span class="muted" style="font-size:12px">تغییرات با «ذخیره» اعمال می‌شود</span></div>
+    <div class="mbar"><button class="btn danger sm" onclick="delClass(${id})">🗑 حذف</button><select class="btn ghost sm" style="width:auto" onchange="if(this.value!==''){copyClass(${id},+this.value);this.value=''}"><option value="">📋 کپی به روز...</option>${meta.days.map((d, i) => `<option value="${i}">${d}</option>`).join('')}</select><span class="grow"></span><button class="btn ghost sm" onclick="closeModal()">انصراف</button><button class="btn save" onclick="saveModal()">💾 ذخیره</button></div>
+    <div class="mbody">
     <div class="grid2" style="margin-top:14px">
       <div class="field"><label>دبیر</label><select id="m-teacher"><option value="">— بدون دبیر —</option>${teachers.map(t => `<option value="${t.id}" ${t.id === c.teacher_id ? 'selected' : ''}>${esc(t.name)}</option>`).join('')}</select></div>
       <div class="field"><label>محل برگزاری (تایپ کنید؛ اگر نبود ساخته می‌شود)</label><input id="m-school" list="m-school-list" value="${esc(c.school_name || '')}"><datalist id="m-school-list">${schools.map(s => `<option value="${esc(s.name)}">`).join('')}</datalist></div>
@@ -709,28 +724,38 @@ function openClass(id) {
     <label>دانش‌آموزان (<span id="m-count">${fa(c.students.length)}</span>)</label>
     <div class="dropzone" id="m-members" style="min-height:70px;padding:10px"></div>
     <div class="row" style="margin-top:8px"><input id="m-add" list="m-list" placeholder="افزودن دانش‌آموز: نام را بنویسید و Enter بزنید" class="grow"><datalist id="m-list">${students.map(s => `<option value="${esc(s.name)}">`).join('')}</datalist></div>
-    <div class="row" style="margin-top:18px;justify-content:space-between">
-      <button class="btn danger sm" onclick="delClass(${id})">🗑 حذف کلاس</button>
-      <select id="m-copy" class="btn ghost sm" style="width:auto" onchange="if(this.value!==''){copyClass(${id},+this.value);this.value=''}"><option value="">📋 کپی به روز...</option>${meta.days.map((d, i) => `<option value="${i}">${d}</option>`).join('')}</select>
-      <span class="grow"></span>
-      <button class="btn ghost" onclick="closeModal()">انصراف</button>
-      <button class="btn" onclick="saveModal()">ذخیره</button>
     </div>`);
   renderMembers();
-  $('#m-add').onkeydown = e => { if (e.key === 'Enter') { e.preventDefault(); const s = students.find(x => x.name === e.target.value.trim()); if (s && !M.body.student_ids.includes(s.id)) { M.body.student_ids.push(s.id); renderMembers(); } e.target.value = ''; } };
+  $('#m-add').onkeydown = async e => {
+    if (e.key !== 'Enter') return; e.preventDefault();
+    const name = e.target.value.trim(); if (!name) return;
+    let s = students.find(x => x.name === name) || students.find(x => norm(x.name) === norm(name));
+    if (!s) {
+      if (!confirm(`«${name}» در لیست نیست. به‌عنوان دانش‌آموز جدید ساخته شود؟`)) return;
+      const phone = prompt('شماره تماس (اختیاری):', '') || '';
+      const r = await api('/api/students', 'POST', { name, school_id: M.body.school_id || null, note: '', active: 1, phone: phone.trim(), meeting_date: '', contact_note: '' });
+      students = await api('/api/students'); s = students.find(x => x.id === r.id); renderPool();
+      $('#m-list').innerHTML = students.map(x => `<option value="${esc(x.name)}">`).join('');
+    }
+    if (s && !M.body.student_ids.includes(s.id)) { M.body.student_ids.push(s.id); renderMembers(); }
+    e.target.value = '';
+  };
 }
 function renderMembers() {
   const box = $('#m-members'); if (!box) return;
   $('#m-count').textContent = fa(M.body.student_ids.length);
   box.innerHTML = M.body.student_ids.map(id => { const s = students.find(x => x.id === id); return s ? `<div class="member"><span>${esc(s.name)}</span><span class="x" onclick="M.body.student_ids=M.body.student_ids.filter(x=>x!==${id});renderMembers()">✕</span></div>` : ''; }).join('') || '<div class="hint" style="padding:12px">بدون دانش‌آموز</div>';
 }
+function patchLocal(id, body) { const c = classes.find(x => x.id === id); if (!c) return; Object.assign(c, body); c.students = (body.student_ids || c.student_ids || []).map(sid => students.find(s => s.id === sid)).filter(Boolean); c.student_ids = c.students.map(s => s.id); const t = teacherById(body.teacher_id); c.teacher_name = t ? t.name : null; c.teacher_color = t ? t.color : null; const sc = schools.find(x => x.id === body.school_id); c.school_name = sc ? sc.name : null; c.school_color = sc ? sc.color : null; renderBoard(); }
 async function saveModal() {
   const b = M.body;
   b.type = $('#m-type').value; b.teacher_id = +$('#m-teacher').value || null; b.school_id = await schoolIdFor($('#m-school').value); b.title = $('#m-title').value.trim(); b.day = +$('#m-day').value; b.note = $('#m-note').value;
   b.start = $('#m-start').value; b.end = $('#m-end').value;
   if (!b.start || !b.end || b.start >= b.end) return toast('بازه زمانی نامعتبر است', 'bad');
-  try { await saveWithConfirm(b, M.id); closeModal(); toast('ذخیره شد ✅', 'ok'); reloadClasses(); }
-  catch (e) { if (e.message !== 'cancel') toast(e.message, 'bad'); }
+  const id = M.id;
+  closeModal(); patchLocal(id, { ...b }); toast('ذخیره شد ✅', 'ok');          // show the result immediately
+  try { await saveWithConfirm(b, id); reloadClasses(); }
+  catch (e) { reloadClasses(); if (e.message !== 'cancel') toast(e.message, 'bad'); }
 }
 async function copyClass(id, day) {
   try { await api('/api/classes/bulk', 'POST', { action: 'copy', ids: [id], to_day: day }); closeModal(); toast('کپی شد به ' + meta.days[day], 'ok'); reloadClasses(); } catch (e) { toast(e.message, 'bad'); }
@@ -933,15 +958,19 @@ function editStudent(id) {
     <div class="field"><label>مدرسه</label><select id="m-school"><option value="">—</option>${schools.map(x => `<option value="${x.id}" ${x.id === s.school_id ? 'selected' : ''}>${esc(x.name)}</option>`).join('')}</select></div>
     <div class="grid3"><div class="field"><label>شماره تماس</label><input id="m-phone" dir="ltr" value="${esc(s.phone || '')}"></div><div class="field"><label>روز جلسه</label><input type="date" id="m-meet" value="${s.meeting_date || ''}"></div><div class="field"><label>توضیحات تماس</label><input id="m-cnote" value="${esc(s.contact_note || '')}"></div></div>
     <div class="grid2"><div class="field"><label>وضعیت</label><select id="m-active"><option value="1" ${s.active ? 'selected' : ''}>فعال</option><option value="0" ${!s.active ? 'selected' : ''}>غیرفعال</option></select></div><div class="field"><label>توضیح</label><input id="m-note" value="${esc(s.note)}"></div></div>
-    <div class="row" style="justify-content:flex-end"><button class="btn ghost" onclick="closeModal()">انصراف</button><button class="btn" onclick="saveStudent(${id || 0})">ذخیره</button></div>`);
+    <div class="row" style="justify-content:flex-end"><button class="btn ghost" onclick="closeModal()">انصراف</button>${id ? '' : '<button class="btn ghost" onclick="saveStudent(0, true)">ذخیره و بعدی</button>'}<button class="btn" onclick="saveStudent(${id || 0})">ذخیره</button></div>`);
+  setTimeout(() => $('#m-name')?.focus(), 30);
 }
-async function saveStudent(id) {
+async function saveStudent(id, again) {
   const body = { name: $('#m-name').value.trim(), school_id: +$('#m-school').value || null, note: $('#m-note').value, active: +$('#m-active').value, phone: $('#m-phone').value.trim(), meeting_date: $('#m-meet').value, contact_note: $('#m-cnote').value };
   if (!body.name) return toast('نام لازم است', 'bad');
   const sim = similarNames(students, body.name, id || 0);
   if (sim.length && sim[0].score === 3 && !confirm(`«${body.name}» قبلاً ثبت شده. با این حال اضافه شود؟`)) return;
   if (id) await api('/api/students/' + id, 'PUT', body); else await api('/api/students', 'POST', body);
-  closeModal(); toast('ذخیره شد', 'ok'); loadAll();
+  students = await api('/api/students');
+  toast(`${body.name} ذخیره شد ✅`, 'ok');
+  if (again) { ['#m-name', '#m-phone', '#m-cnote'].forEach(x => $(x).value = ''); showSimilar('#m-sim', students, '', 0); $('#m-name').focus(); renderPool(); return; }
+  closeModal(); loadAll();
 }
 
 /* ================= SCHOOLS ================= */
