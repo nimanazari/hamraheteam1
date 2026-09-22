@@ -156,7 +156,7 @@
           <label><input type="checkbox" id="ui-stats" style="width:auto" onchange="saveUI()"> آمار بالای تخته</label>
           <p class="muted" style="font-size:12px;margin-top:8px">میان‌برها همیشه کار می‌کنند: Ctrl+Z برگرد · Ctrl+Y تکرار · Ctrl+C کپی کلاس باز · Ctrl+X بریدن · Ctrl+V چسباندن در روزی که موس رویش است · F تمام‌صفحه · L لیست</p></div>
         <div class="card" id="phones-card" style="grid-column:1/-1"><h3>📞 شماره‌ها و روز جلسه</h3>
-          <div class="row" style="margin-bottom:8px"><input id="ph-q" placeholder="جستجوی نام یا شماره..." style="width:240px" oninput="renderPhones()"><label><input type="checkbox" id="ph-only" style="width:auto" onchange="renderPhones()"> فقط بدون روز پیشنهادی</label><label><input type="checkbox" id="ph-off" style="width:auto" onchange="renderPhones()"> فقط دارای ۱۰٪ تخفیف</label><button class="btn ghost sm" onclick="exportPhones()">⬇️ اکسل</button></div>
+          <div class="row" style="margin-bottom:8px"><input id="ph-q" placeholder="جستجوی نام یا شماره..." style="width:240px" oninput="renderPhones()"><label><input type="checkbox" id="ph-only" style="width:auto" onchange="renderPhones()"> فقط بدون روز پیشنهادی</label><label><input type="checkbox" id="ph-off" style="width:auto" onchange="renderPhones()"> فقط دارای تخفیف</label><button class="btn ghost sm" onclick="exportPhones()">⬇️ اکسل</button></div>
           <p class="muted" style="font-size:12px">هر تغییر همان لحظه ذخیره می‌شود. روز جلسه را با کلیک روی تقویم انتخاب کنید.</p>
           <div style="overflow-x:auto"><table id="ph-table"></table></div></div>
         <div class="card" id="classes-card" style="grid-column:1/-1"><h3>🗂 کلاس‌های روی تخته</h3>
@@ -317,7 +317,7 @@ function renderPool() {
     html = students.filter(s => (!q || s.name.includes(q)) && (!sch || s.school_id === sch)).map(s => {
       const n = classes.filter(c => c.student_ids.includes(s.id)).length;
       const av = availShort(s);
-      return `<div class="stu item ${s.active ? '' : 'inactive'} ${av ? 'has-av' : ''}" draggable="true" data-type="student" data-id="${s.id}" title="${esc(s.note)}${av ? ' — پیشنهاد خانواده: ' + av : ''}"><span>${esc(s.name)}${av ? `<em class="avtag">${esc(av)}</em>` : ''}</span><span class="sch">${n ? fa(n) + ' کلاس' : ''}</span></div>`;
+      return `<div class="stu item ${s.active ? '' : 'inactive'} ${av ? 'has-av' : ''}" draggable="true" data-type="student" data-id="${s.id}" title="${esc(s.note)}${av ? ' — پیشنهاد خانواده: ' + av : ''}"><span>${esc(s.name)}${s.discount ? ` <span class="off10">${fa(s.discount)}٪</span>` : ''}${av ? `<em class="avtag">${esc(av)}</em>` : ''}</span><span class="sch">${n ? fa(n) + ' کلاس' : ''}</span></div>`;
     }).join('');
   }
   $('#pool').innerHTML = html;
@@ -1128,7 +1128,7 @@ function renderStudents() {
   const list = students.filter(s => !q || s.name.includes(q) || (s.phone || '').includes(q));
   renderDupBanner('#s-dups', students, 'students');
   $('#s-table').innerHTML = `<tr><th>#</th><th>نام</th><th>شماره</th><th>روز پیشنهادی</th><th>مدرسه</th><th>وضعیت</th><th>کلاس‌ها</th><th></th></tr>` + list.map((s, i) => `<tr style="${s.active ? '' : 'opacity:.5'}">
-    <td>${fa(i + 1)}</td><td><b>${esc(s.name)}</b>${/۱۰%|10%/.test(s.contact_note || '') ? ' <span class="off10">۱۰٪</span>' : ''}${s.contact_note ? `<div class="muted" style="font-size:11px">${esc(s.contact_note)}</div>` : ''}</td><td dir="ltr">${esc(s.phone || '—')}</td><td>${availShort(s) || '<span class="muted">—</span>'}</td><td>${esc(schoolName(s.school_id)) || '<span class="muted">—</span>'}</td><td>${s.active ? '<span class="chip">فعال</span>' : `<span class="chip" style="background:#fee2e2">${esc(s.note || 'غیرفعال')}</span>`}</td>
+    <td>${fa(i + 1)}</td><td><b>${esc(s.name)}</b>${s.discount ? ` <span class="off10">${fa(s.discount)}٪</span>` : ''}${s.contact_note ? `<div class="muted" style="font-size:11px">${esc(s.contact_note)}</div>` : ''}</td><td dir="ltr">${esc(s.phone || '—')}</td><td>${availShort(s) || '<span class="muted">—</span>'}</td><td>${esc(schoolName(s.school_id)) || '<span class="muted">—</span>'}</td><td>${s.active ? '<span class="chip">فعال</span>' : `<span class="chip" style="background:#fee2e2">${esc(s.note || 'غیرفعال')}</span>`}</td>
     <td>${classes.filter(c => c.student_ids.includes(s.id)).map(c => `<span class="chip" style="background:${c.teacher_color}22;border-color:${c.teacher_color}55">${meta.days[c.day]} ${fa(c.start)} ${esc(c.teacher_name || '')}</span>`).join(' ')}</td>
     <td><button class="btn ghost sm" onclick="editStudent(${s.id})">ویرایش</button> <button class="btn ghost sm" onclick="del('students',${s.id})">حذف</button></td></tr>`).join('');
 }
@@ -1138,14 +1138,14 @@ function editStudent(id) {
   openModal(`<h2>${id ? 'ویرایش' : 'افزودن'} دانش‌آموز</h2>
     <div class="field"><label>نام</label><input id="m-name" value="${esc(s.name)}" autofocus oninput="showSimilar('#m-sim', students, this.value, ${id || 0})"><div id="m-sim"></div></div>
     <div class="field"><label>مدرسه</label><select id="m-school"><option value="">—</option>${schools.map(x => `<option value="${x.id}" ${x.id === s.school_id ? 'selected' : ''}>${esc(x.name)}</option>`).join('')}</select></div>
-    <div class="grid2"><div class="field"><label>شماره تماس</label><input id="m-phone" dir="ltr" value="${esc(s.phone || '')}"></div><div class="field"><label>توضیحات تماس</label><input id="m-cnote" value="${esc(s.contact_note || '')}"></div></div>
+    <div class="grid3"><div class="field"><label>شماره تماس</label><input id="m-phone" dir="ltr" value="${esc(s.phone || '')}"></div><div class="field"><label>تخفیف ٪</label><input type="number" id="m-disc" min="0" max="100" value="${s.discount || 0}"></div><div class="field"><label>توضیحات تماس</label><input id="m-cnote" value="${esc(s.contact_note || '')}"></div></div>
     ${id ? `<div class="field"><label>روز و ساعت پیشنهادی خانواده</label>${availRows(s)}</div>` : ''}
     <div class="grid2"><div class="field"><label>وضعیت</label><select id="m-active"><option value="1" ${s.active ? 'selected' : ''}>فعال</option><option value="0" ${!s.active ? 'selected' : ''}>غیرفعال</option></select></div><div class="field"><label>توضیح</label><input id="m-note" value="${esc(s.note)}"></div></div>
     <div class="row" style="justify-content:flex-end"><button class="btn ghost" onclick="closeModal()">انصراف</button>${id ? '' : '<button class="btn ghost" onclick="saveStudent(0, true)">ذخیره و بعدی</button>'}<button class="btn" onclick="saveStudent(${id || 0})">ذخیره</button></div>`);
   setTimeout(() => $('#m-name')?.focus(), 30);
 }
 async function saveStudent(id, again) {
-  const body = { name: $('#m-name').value.trim(), school_id: +$('#m-school').value || null, note: $('#m-note').value, active: +$('#m-active').value, phone: $('#m-phone').value.trim(), contact_note: $('#m-cnote').value };
+  const body = { name: $('#m-name').value.trim(), school_id: +$('#m-school').value || null, note: $('#m-note').value, active: +$('#m-active').value, phone: $('#m-phone').value.trim(), discount: +$('#m-disc').value || 0, contact_note: $('#m-cnote').value };
   if (!body.name) return toast('نام لازم است', 'bad');
   const sim = similarNames(students, body.name, id || 0);
   if (sim.length && sim[0].score === 3 && !confirm(`«${body.name}» قبلاً ثبت شده. با این حال اضافه شود؟`)) return;
@@ -1332,17 +1332,18 @@ function renderPhones() {
   const t = $('#ph-table'); if (!t) return;
   const q = ($('#ph-q')?.value || '').trim(), only = $('#ph-only')?.checked;
   const off = $('#ph-off')?.checked;
-  const list = students.filter(x => (!q || x.name.includes(q) || (x.phone || '').includes(q)) && (!only || !availOf(x).length) && (!off || /۱۰%|10%/.test(x.contact_note || '')));
-  t.innerHTML = `<tr><th>#</th><th>نام</th><th>شماره تماس</th><th>روز و ساعت پیشنهادی خانواده</th><th>توضیحات تماس</th></tr>` + list.map((x, i) => `<tr style="${x.active ? '' : 'opacity:.55'}">
-    <td>${fa(i + 1)}</td><td><b>${esc(x.name)}</b>${x.note ? `<div class="muted" style="font-size:11px">${esc(x.note)}</div>` : ''}${x.active ? '' : '<div class="muted" style="font-size:11px">غیرفعال</div>'}</td>
+  const list = students.filter(x => (!q || x.name.includes(q) || (x.phone || '').includes(q)) && (!only || !availOf(x).length) && (!off || x.discount > 0));
+  t.innerHTML = `<tr><th>#</th><th>نام</th><th>شماره تماس</th><th>روز و ساعت پیشنهادی خانواده</th><th>توضیحات تماس</th><th>تخفیف ٪</th></tr>` + list.map((x, i) => `<tr style="${x.active ? '' : 'opacity:.55'}">
+    <td>${fa(i + 1)}</td><td><b>${esc(x.name)}</b>${x.discount ? ` <span class="off10">${fa(x.discount)}٪</span>` : ''}${x.note ? `<div class="muted" style="font-size:11px">${esc(x.note)}</div>` : ''}${x.active ? '' : '<div class="muted" style="font-size:11px">غیرفعال</div>'}</td>
     <td><input dir="ltr" value="${esc(x.phone || '')}" placeholder="09..." style="width:135px" onchange="setStudent(${x.id},'phone',this.value)"></td>
     <td>${availRows(x)}</td>
-    <td>${/۱۰%|10%/.test(x.contact_note || '') ? '<span class="off10">۱۰٪</span>' : ''}<input value="${esc(x.contact_note || '')}" placeholder="مثلاً: تماس گرفته شد، منتظر جواب" onchange="setStudent(${x.id},'contact_note',this.value)" style="width:calc(100% - 42px)"></td></tr>`).join('');
+    <td><input value="${esc(x.contact_note || '')}" placeholder="مثلاً: تماس گرفته شد، منتظر جواب" onchange="setStudent(${x.id},'contact_note',this.value)"></td>
+    <td><input type="number" min="0" max="100" value="${x.discount || 0}" style="width:62px;text-align:center" onchange="setStudent(${x.id},'discount',+this.value||0)"></td></tr>`).join('');
 
 }
 async function setStudent(id, key, val) { await api('/api/students/' + id, 'PUT', { [key]: String(val || '').trim() }); const x = students.find(s => s.id === id); if (x) x[key] = String(val || '').trim(); toast('ذخیره شد', 'ok'); }
 function exportPhones() {
-  const rows = [['نام', 'شماره', 'روز و ساعت پیشنهادی', 'توضیحات', 'وضعیت'], ...students.map(x => [x.name, x.phone || '', availOf(x).map(a => `${meta.days[a.day]} ${a.start || ''}-${a.end || ''}`).join(' / '), x.contact_note || '', x.active ? 'فعال' : 'غیرفعال' + (x.note ? ' (' + x.note + ')' : '')])];
+  const rows = [['نام', 'شماره', 'تخفیف ٪', 'روز و ساعت پیشنهادی', 'توضیحات', 'وضعیت'], ...students.map(x => [x.name, x.phone || '', x.discount || 0, availOf(x).map(a => `${meta.days[a.day]} ${a.start || ''}-${a.end || ''}`).join(' / '), x.contact_note || '', x.active ? 'فعال' : 'غیرفعال' + (x.note ? ' (' + x.note + ')' : '')])];
   const csv = '\ufeff' + rows.map(r => r.map(v => '"' + String(v ?? '').replace(/"/g, '""') + '"').join(',')).join('\r\n');
   const a = document.createElement('a'); a.href = URL.createObjectURL(new Blob([csv], { type: 'text/csv;charset=utf-8' })); a.download = 'phones.csv'; a.click();
 }
