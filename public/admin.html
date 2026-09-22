@@ -291,7 +291,7 @@ function renderBoard() {
         ${!c.title && c.type === 'robotic' ? `<div class="s edit-line open-line" data-edit="title" data-cls="${c.id}" title="کلیک: نام کلاس">🏷 <span class="faint">نام کلاس</span></div>` : ''}
         <div class="s edit-line open-line" data-edit="type" data-cls="${c.id}" title="کلیک: نوع کلاس">${TYPE_ICON[c.type] || '🤖'} ${TYPES[c.type] || 'رباتیک'}</div>
         ${needsStudents(c) ? `<details class="n" onclick="event.stopPropagation()"><summary>🎒 ${fa(c.students.length)}</summary><div class="n">${c.students.map(s => `<span class="mini chip-in" draggable="true" data-type="student" data-id="${s.id}" data-from="${c.id}" title="${esc(s.name)} — بکشید تا خارج شود">${esc(s.name)}</span>`).join('')}</div></details>` : ''}
-        ${warn ? `<div class="warn-tag">⚠️ ${warn}</div>` : ''}
+        ${warn ? `<div class="warn-dot" title="${esc(warn)}">⚠️</div><div class="warn-tag open-line">⚠️ ${warn}</div>` : ''}
         <div class="open-only"><div class="handles"><span class="hmove" title="بکشید: جابه‌جایی ساعت (۳۰ دقیقه‌ای)" onmousedown="startDragTime(event, ${c.id}, 'move')">↕ جابه‌جایی</span><span class="hresize" title="بکشید: تغییر ساعت پایان" onmousedown="startDragTime(event, ${c.id}, 'end')">═ مدت</span></div><button class="btn sm" onclick="event.stopPropagation();openClass(${c.id})">✏️ ویرایش کامل</button></div>
       </div>`;
     }).join('')}</div></div>`;
