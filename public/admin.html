@@ -97,12 +97,14 @@
     <!-- ========== TEACHERS ========== -->
     <section class="view" id="v-teachers">
       <div class="topbar"><h2>دبیران</h2><button class="btn" onclick="editTeacher()">+ دبیر جدید</button></div>
+      <div id="t-dups"></div>
       <div class="card"><table id="t-table"></table></div>
     </section>
 
     <!-- ========== STUDENTS ========== -->
     <section class="view" id="v-students">
       <div class="topbar"><h2>دانش‌آموزان</h2><div class="row"><input id="s-q" placeholder="جستجو..." style="width:200px"><button class="btn" onclick="editStudent()">+ دانش‌آموز جدید</button></div></div>
+      <div id="s-dups"></div>
       <div class="card"><table id="s-table"></table></div>
     </section>
 
@@ -778,6 +780,7 @@ async function saveOverride(cid, iso) {
 /* ================= TEACHERS ================= */
 const COLORS = ['#5b5bd6', '#0ea5e9', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6', '#ec4899', '#14b8a6', '#f97316', '#64748b'];
 function renderTeachers() {
+  renderDupBanner('#t-dups', teachers, 'teachers');
   $('#t-table').innerHTML = `<tr><th>رنگ</th><th>نام</th><th>درس</th><th>نام کاربری</th><th>رمز</th><th>تعداد کلاس</th><th></th></tr>` + teachers.map(t => `<tr>
     <td><span class="dot" style="background:${t.color}"></span></td><td><b>${esc(t.name)}</b></td><td>${esc(t.subject)}</td><td dir="ltr">${esc(t.username)}</td><td dir="ltr">${esc(t.password)}${t.is_admin ? ` <span class="chip" style="font-size:10px" title="${(t.perms || []).map(p => PERM_NAMES[p]).join('، ')}">مدیر</span>` : ''}</td>
     <td>${fa(classes.filter(c => c.teacher_id === t.id).length)}</td>
@@ -786,7 +789,7 @@ function renderTeachers() {
 function editTeacher(id) {
   const t = teachers.find(x => x.id === id) || { name: '', subject: '', username: '', password: '1234', color: COLORS[teachers.length % COLORS.length] };
   openModal(`<h2>${id ? 'ویرایش' : 'افزودن'} دبیر</h2>
-    <div class="field"><label>نام</label><input id="m-name" value="${esc(t.name)}" autofocus></div>
+    <div class="field"><label>نام</label><input id="m-name" value="${esc(t.name)}" autofocus oninput="showSimilar('#m-sim', teachers, this.value, ${id || 0})"><div id="m-sim"></div></div>
     <div class="field"><label>درس</label><input id="m-subject" value="${esc(t.subject)}"></div>
     <div class="grid2"><div class="field"><label>نام کاربری (انگلیسی)</label><input id="m-user" dir="ltr" value="${esc(t.username)}"></div><div class="field"><label>رمز</label><input id="m-pass" dir="ltr" value="${esc(t.password)}"></div></div>
     ${ME.main ? `<div class="box"><label><input type="checkbox" id="m-admin" ${t.is_admin ? 'checked' : ''} style="width:auto;vertical-align:middle" onchange="$('#m-perms').style.display=this.checked?'':'none'"> <b>دسترسی مدیر</b></label>
@@ -799,14 +802,49 @@ async function saveTeacher(id) {
   const body = { name: $('#m-name').value.trim(), subject: $('#m-subject').value.trim(), username: $('#m-user').value.trim() || null, password: $('#m-pass').value, color: $('#m-color').value };
   if (ME.main) { body.is_admin = $('#m-admin').checked ? 1 : 0; body.perms = $$('.m-perm:checked').map(x => x.value); }
   if (!body.name) return toast('نام لازم است', 'bad');
+  const simT = similarNames(teachers, body.name, id || 0);
+  if (simT.length && simT[0].score === 3 && !confirm(`دبیری به نام «${body.name}» قبلاً هست. با این حال اضافه شود؟`)) return;
   try { if (id) await api('/api/teachers/' + id, 'PUT', body); else await api('/api/teachers', 'POST', body); closeModal(); toast('ذخیره شد', 'ok'); loadAll(); }
   catch (e) { toast(e.message.includes('UNIQUE') ? 'این نام کاربری قبلاً استفاده شده' : e.message, 'bad'); }
 }
 
 /* ================= STUDENTS ================= */
+const norm = x => String(x || '').replace(/[‌\sً-ٟ]+/g, '').replace(/ي/g, 'ی').replace(/ك/g, 'ک').replace(/[\(\)]/g, '').toLowerCase();
+function similarNames(list, name, selfId) {
+  const n = norm(name); if (n.length < 3) return [];
+  const parts = String(name).trim().split(/\s+/).filter(p => p.length > 2).map(norm);
+  return list.filter(x => x.id !== selfId).map(x => { const m = norm(x.name); const exact = m === n; const contains = m.includes(n) || n.includes(m); const shared = parts.filter(p => m.includes(p)).length; return { x, score: exact ? 3 : contains ? 2 : shared >= 2 || (shared === 1 && parts.length === 1) ? 1 : 0 }; }).filter(r => r.score).sort((a, b) => b.score - a.score).slice(0, 6);
+}
+function showSimilar(boxId, list, name, selfId) {
+  const box = $(boxId); if (!box) return;
+  const sim = similarNames(list, name, selfId);
+  box.innerHTML = sim.length ? `<div class="sim ${sim[0].score === 3 ? 'dup' : ''}">${sim[0].score === 3 ? '⛔ این نام قبلاً ثبت شده:' : '⚠️ نام‌های مشابه:'} ${sim.map(r => `<span class="chip" style="${r.score === 3 ? 'background:#fee2e2;border-color:#fca5a5' : ''}">${esc(r.x.name)}${r.x.note ? ' · ' + esc(r.x.note) : ''}${r.x.active === 0 ? ' (غیرفعال)' : ''}</span>`).join(' ')}</div>` : '';
+  return sim;
+}
+function findDuplicates(list) {
+  const seen = {}; const out = [];
+  for (const x of list) { const k = norm(x.name); if (!k) continue; (seen[k] = seen[k] || []).push(x); }
+  for (const k in seen) if (seen[k].length > 1) out.push(seen[k]);
+  return out;
+}
+function renderDupBanner(id, list, table) {
+  const el = $(id); if (!el) return;
+  const dups = findDuplicates(list);
+  el.innerHTML = dups.length ? `<div class="sim dup">⛔ ${fa(dups.length)} نام تکراری: ${dups.map(g => `<b>${esc(g[0].name)}</b> (${fa(g.length)} بار) <button class="btn ghost sm" onclick="mergeDup('${table}',${JSON.stringify(g.map(x => x.id)).replace(/"/g, '&quot;')})">حذف تکراری‌ها</button>`).join(' · ')}</div>` : '';
+}
+async function mergeDup(table, ids) {
+  const keep = ids[0];
+  if (!confirm(`از ${fa(ids.length)} مورد، اولی نگه داشته می‌شود و بقیه حذف می‌شوند. ادامه؟`)) return;
+  for (const id of ids.slice(1)) {
+    if (table === 'students') { for (const c of classes.filter(c => c.student_ids.includes(id))) { const b = bodyOf(c); b.student_ids = [...new Set(b.student_ids.map(x => x === id ? keep : x))]; await api('/api/classes/' + c.id, 'PUT', { ...b, force: true }); } }
+    await api(`/api/${table}/${id}`, 'DELETE');
+  }
+  toast('تکراری‌ها حذف شد', 'ok'); loadAll();
+}
 function renderStudents() {
   const q = $('#s-q').value.trim();
   const list = students.filter(s => !q || s.name.includes(q));
+  renderDupBanner('#s-dups', students, 'students');
   $('#s-table').innerHTML = `<tr><th>#</th><th>نام</th><th>مدرسه</th><th>وضعیت</th><th>کلاس‌ها</th><th></th></tr>` + list.map((s, i) => `<tr style="${s.active ? '' : 'opacity:.5'}">
     <td>${fa(i + 1)}</td><td><b>${esc(s.name)}</b></td><td>${esc(schoolName(s.school_id)) || '<span class="muted">—</span>'}</td><td>${s.active ? '<span class="chip">فعال</span>' : `<span class="chip" style="background:#fee2e2">${esc(s.note || 'غیرفعال')}</span>`}</td>
     <td>${classes.filter(c => c.student_ids.includes(s.id)).map(c => `<span class="chip" style="background:${c.teacher_color}22;border-color:${c.teacher_color}55">${meta.days[c.day]} ${fa(c.start)} ${esc(c.teacher_name || '')}</span>`).join(' ')}</td>
@@ -816,7 +854,7 @@ $('#s-q').oninput = renderStudents;
 function editStudent(id) {
   const s = students.find(x => x.id === id) || { name: '', school_id: null, note: '', active: 1 };
   openModal(`<h2>${id ? 'ویرایش' : 'افزودن'} دانش‌آموز</h2>
-    <div class="field"><label>نام</label><input id="m-name" value="${esc(s.name)}" autofocus></div>
+    <div class="field"><label>نام</label><input id="m-name" value="${esc(s.name)}" autofocus oninput="showSimilar('#m-sim', students, this.value, ${id || 0})"><div id="m-sim"></div></div>
     <div class="field"><label>مدرسه</label><select id="m-school"><option value="">—</option>${schools.map(x => `<option value="${x.id}" ${x.id === s.school_id ? 'selected' : ''}>${esc(x.name)}</option>`).join('')}</select></div>
     <div class="grid2"><div class="field"><label>وضعیت</label><select id="m-active"><option value="1" ${s.active ? 'selected' : ''}>فعال</option><option value="0" ${!s.active ? 'selected' : ''}>غیرفعال</option></select></div><div class="field"><label>توضیح</label><input id="m-note" value="${esc(s.note)}"></div></div>
     <div class="row" style="justify-content:flex-end"><button class="btn ghost" onclick="closeModal()">انصراف</button><button class="btn" onclick="saveStudent(${id || 0})">ذخیره</button></div>`);
@@ -824,6 +862,8 @@ function editStudent(id) {
 async function saveStudent(id) {
   const body = { name: $('#m-name').value.trim(), school_id: +$('#m-school').value || null, note: $('#m-note').value, active: +$('#m-active').value };
   if (!body.name) return toast('نام لازم است', 'bad');
+  const sim = similarNames(students, body.name, id || 0);
+  if (sim.length && sim[0].score === 3 && !confirm(`«${body.name}» قبلاً ثبت شده. با این حال اضافه شود؟`)) return;
   if (id) await api('/api/students/' + id, 'PUT', body); else await api('/api/students', 'POST', body);
   closeModal(); toast('ذخیره شد', 'ok'); loadAll();
 }
