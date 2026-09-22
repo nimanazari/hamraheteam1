@@ -539,8 +539,11 @@ async function handleDrop(item, target) {
     if (target.remove) {
       if (item.roster) { const t = teacherById(item.roster); await setRoster(t.id, t.student_ids.filter(x => x !== item.id)); return toast('از لیست دبیر خارج شد', 'ok'); }
       if (!item.from) return;
-      await removeFrom(item); await reloadClasses();
-      return toast(item.type === 'teacher' ? 'دبیر از کلاس خارج شد' : 'دانش‌آموز از کلاس خارج شد', 'ok');
+      const src = classes.find(x => x.id === item.from);
+      if (src) { const sb = bodyOf(src); if (item.type === 'teacher') sb.teacher_id = null; else sb.student_ids = sb.student_ids.filter(x => x !== item.id); patchLocal(src.id, sb); }
+      toast(item.type === 'teacher' ? 'دبیر از کلاس خارج شد' : 'دانش‌آموز از کلاس خارج شد', 'ok');
+      try { await removeFrom(item); } finally { reloadClasses(); }
+      return;
     }
     if (item.from && target.cls === item.from) return;
     if (item.type === 'class') {
@@ -555,9 +558,11 @@ async function handleDrop(item, target) {
       const body = bodyOf(c);
       if (item.type === 'teacher') { if (c.teacher_id === item.id) return; body.teacher_id = item.id; body.student_ids = [...new Set([...body.student_ids, ...(teacherById(item.id)?.student_ids || [])])]; }
       else { if (c.type === 'public') return toast('کلاس عمومی دانش‌آموز نمی‌گیرد. نوع کلاس را عوض کنید', 'bad'); if (c.student_ids.includes(item.id)) return toast('این دانش‌آموز در کلاس هست'); body.student_ids = [...c.student_ids, item.id]; }
-      await saveWithConfirm(body, c.id);
-      if (item.from) await removeFrom(item);
-      toast(item.type === 'teacher' ? 'دبیر تعیین شد' : 'دانش‌آموز اضافه شد', 'ok');
+      if (item.from) { const src = classes.find(x => x.id === item.from); if (src) { const sb = bodyOf(src); if (item.type === 'teacher') sb.teacher_id = null; else sb.student_ids = sb.student_ids.filter(x => x !== item.id); patchLocal(src.id, sb); } }
+      patchLocal(c.id, body);                                   // show it right away
+      toast(item.type === 'teacher' ? 'دبیر تعیین شد' : 'دانش‌آموز اضافه شد ✅', 'ok');
+      try { await saveWithConfirm(body, c.id); if (item.from) await removeFrom(item); } finally { reloadClasses(); }
+      return;
     } else {
       // new class on a day
       const M = t => +t.slice(0, 2) * 60 + +t.slice(3), F = m => `${String(Math.floor(m / 60)).padStart(2, '0')}:${String(m % 60).padStart(2, '0')}`; const st0 = target.at || (meta.slots[0] || '10:00-12:00').split('-')[0]; const dur0 = M((meta.slots[0] || '10:00-12:00').split('-')[1]) - M((meta.slots[0] || '10:00-12:00').split('-')[0]);
@@ -854,7 +859,7 @@ function openClass(id) {
       students = await api('/api/students'); s = students.find(x => x.id === r.id); renderPool();
       $('#m-list').innerHTML = students.map(x => `<option value="${esc(x.name)}">`).join('');
     }
-    if (s && !M.body.student_ids.includes(s.id)) { M.body.student_ids.push(s.id); renderMembers(); }
+    if (s && !M.body.student_ids.includes(s.id)) { M.body.student_ids.push(s.id); renderMembers(); if (M.id) { patchLocal(M.id, { ...M.body }); api('/api/classes/' + M.id, 'PUT', { ...M.body, force: true }).then(() => reloadClasses()); } }
     e.target.value = '';
   };
 }
