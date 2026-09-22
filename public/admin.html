@@ -207,7 +207,7 @@ let poolTab = 'teachers';
 const TYPES = { public: 'عمومی', robotic: 'رباتیک', private: 'خصوصی' };
 const TYPE_ICON = { public: '🏫', robotic: '🤖', private: '👤' };
 const needsStudents = c => c.type !== 'public';
-const cardColor = c => c.color || (meta.color_mode === 'school' ? (c.school_color || c.teacher_color) : (c.teacher_color || c.school_color)) || '#a78bfa';
+const cardColor = c => c.color || (meta.color_mode === 'school' ? (c.school_color || c.teacher_color) : c.teacher_color) || '#9aa3b2';
 const cardWarn = c => c.type === 'public' ? (!c.school_id ? 'مدرسه را انتخاب کنید' : '') : (!c.students.length ? 'دانش‌آموز اضافه کنید' : '');
 let picked = null; // {type, id} for tap-to-place on touch devices
 const TOUCH = matchMedia('(pointer: coarse)').matches;
@@ -292,6 +292,8 @@ function renderBoard() {
         ${!c.title && c.type === 'robotic' ? `<div class="s edit-line open-line" data-edit="title" data-cls="${c.id}" title="کلیک: نام کلاس">🏷 <span class="faint">نام کلاس</span></div>` : ''}
         <div class="s edit-line open-line" data-edit="type" data-cls="${c.id}" title="کلیک: نوع کلاس">${TYPE_ICON[c.type] || '🤖'} ${TYPES[c.type] || 'رباتیک'}</div>
         ${needsStudents(c) ? `<details class="n" onclick="event.stopPropagation()"><summary>🎒 ${fa(c.students.length)}</summary><div class="n">${c.students.map(s => `<span class="mini chip-in" draggable="true" data-type="student" data-id="${s.id}" data-from="${c.id}" title="${esc(s.name)} — بکشید تا خارج شود">${esc(s.name)}</span>`).join('')}</div></details>` : ''}
+        <div class="rs rs-top" title="بکشید: ساعت شروع" onmousedown="startResize(event, ${c.id}, 'start')"></div>
+        <div class="rs rs-bot" title="بکشید: ساعت پایان" onmousedown="startResize(event, ${c.id}, 'end')"></div>
         ${warn ? `<div class="warn-dot" title="${esc(warn)}">⚠️</div><div class="warn-tag open-line">⚠️ ${warn}</div>` : ''}
         <div class="open-only"><div class="handles"><span class="hmove" title="بکشید: جابه‌جایی ساعت (۳۰ دقیقه‌ای)" onmousedown="startDragTime(event, ${c.id}, 'move')">↕ جابه‌جایی</span><span class="hresize" title="بکشید: تغییر ساعت پایان" onmousedown="startDragTime(event, ${c.id}, 'end')">═ مدت</span></div><button class="btn sm" onclick="event.stopPropagation();openClass(${c.id})">✏️ ویرایش کامل</button></div>
       </div>`;
@@ -653,9 +655,37 @@ function showCtx(e, id) {
 }
 const MIN = t => +String(t).slice(0, 2) * 60 + +String(t).slice(3);
 const HM = m => `${String(Math.floor(m / 60)).padStart(2, '0')}:${String(m % 60).padStart(2, '0')}`;
+function startResize(e, id, edge) {
+  if (e.button !== 0) return;
+  e.preventDefault(); e.stopPropagation();
+  const c = classes.find(x => x.id === id); if (!c) return;
+  const card = e.target.closest('.cls'), inner = card.closest('.col-in'), r = inner.getBoundingClientRect();
+  const g0 = MIN(meta.grid_start || '07:30'), g1 = MIN(meta.grid_end || '21:00'), span = g1 - g0;
+  let st = MIN(c.start), en = MIN(c.end);
+  card.classList.add('resizing'); document.body.classList.add('rs-ing');
+  const lbl = card.querySelector('.edit-line[data-edit=slot]');
+  const mv = ev => {
+    const step = ev.shiftKey ? 5 : 15;
+    const m = Math.round((g0 + Math.max(0, Math.min(1, (ev.clientY - r.top) / r.height)) * span) / step) * step;
+    if (edge === 'start') st = Math.max(g0, Math.min(en - 15, m)); else en = Math.min(g1, Math.max(st + 15, m));
+    card.style.top = ((st - g0) / span * 100).toFixed(3) + '%';
+    card.style.height = ((en - st) / span * 100).toFixed(3) + '%';
+    card.dataset.live = `${fa(HM(st))} – ${fa(HM(en))}`;
+    if (lbl) lbl.textContent = `⏰ ${fa(HM(st))}–${fa(HM(en))}`;
+  };
+  const up = async () => {
+    document.removeEventListener('mousemove', mv); document.removeEventListener('mouseup', up);
+    card.classList.remove('resizing'); document.body.classList.remove('rs-ing'); delete card.dataset.live;
+    if (HM(st) === c.start && HM(en) === c.end) return;
+    const body = bodyOf(c); body.start = HM(st); body.end = HM(en);
+    patchLocal(id, body); toastUndo(`ساعت شد ${fa(HM(st))} تا ${fa(HM(en))}`);
+    try { await saveWithConfirm(body, id); reloadClasses(); } catch (err) { reloadClasses(); if (err.message !== 'cancel') toast(err.message, 'bad'); }
+  };
+  document.addEventListener('mousemove', mv); document.addEventListener('mouseup', up);
+}
 function startCardDrag(e, card) {
   if (e.button !== 0) return;
-  if (e.target.closest('.chip-in,.edit-line,input,button,select,summary,details,.handles,.open-only,.color-line,.warn-tag')) return;
+  if (e.target.closest('.chip-in,.edit-line,input,button,select,summary,details,.handles,.open-only,.color-line,.warn-tag,.rs')) return;
   const id = +card.dataset.cls, c = classes.find(x => x.id === id); if (!c) return;
   e.preventDefault();
   const g0 = MIN(meta.grid_start || '07:30'), g1 = MIN(meta.grid_end || '21:00'), span = g1 - g0, dur = MIN(c.end) - MIN(c.start);
