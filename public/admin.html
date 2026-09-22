@@ -284,11 +284,12 @@ function renderBoard() {
       const top = (st - g0) / span * 100, h = (en - st) / span * 100, w = 100 / cl.n, left = k * w;
       const warn = cardWarn(c), mins = en - st;
       return `<div class="cls drop-cls ${warn ? 'warn' : ''} ${mins < 90 ? 'tiny' : ''}" data-cls="${c.id}" style="background:${cardColor(c)};top:${top.toFixed(3)}%;height:${h.toFixed(3)}%;right:${left.toFixed(3)}%;width:calc(${w.toFixed(3)}% - 3px)" title="${esc(c.teacher_name || '')} · ${fa(c.start)}–${fa(c.end)} · ${esc(c.school_name || '')}${warn ? ' · ⚠️ ' + warn : ''}">
-        <div class="t"${c.teacher_id ? '' : ''}>${c.teacher_id ? `<span class="chip-in" draggable="true" data-type="teacher" data-id="${c.teacher_id}" data-from="${c.id}" title="بکشید تا از کلاس خارج شود">${esc(c.teacher_name)}</span>` : '<span class="faint">بدون دبیر</span>'}</div>
+        <div class="t ${c.teacher_id ? '' : 'no-t'}">${c.teacher_id ? `<span class="chip-in" draggable="true" data-type="teacher" data-id="${c.teacher_id}" data-from="${c.id}" title="بکشید تا از کلاس خارج شود">${esc(c.teacher_name)}</span>` : '<span class="faint">دبیر: —</span>'}</div>
         <div class="s edit-line" data-edit="slot" data-cls="${c.id}" title="کلیک: تغییر ساعت">⏰ ${fa(c.start)}–${fa(c.end)}</div>
         <div class="s edit-line" data-edit="school" data-cls="${c.id}" title="کلیک: محل برگزاری">📍 ${c.school_name ? esc(c.school_name) : '<span class="faint">محل؟</span>'}</div>
-        ${c.type === 'robotic' ? `<div class="s edit-line" data-edit="title" data-cls="${c.id}" title="کلیک: نام کلاس رباتیک">🏷 ${c.title ? esc(c.title) : '<span class="faint">نام کلاس</span>'}</div>` : ''}
-        <div class="s edit-line" data-edit="type" data-cls="${c.id}" title="کلیک: نوع کلاس">${TYPE_ICON[c.type] || '🤖'} ${TYPES[c.type] || 'رباتیک'}</div>
+        ${c.title ? `<div class="s edit-line" data-edit="title" data-cls="${c.id}" title="کلیک: نام کلاس">🏷 ${esc(c.title)}</div>` : ''}
+        ${!c.title && c.type === 'robotic' ? `<div class="s edit-line open-line" data-edit="title" data-cls="${c.id}" title="کلیک: نام کلاس">🏷 <span class="faint">نام کلاس</span></div>` : ''}
+        <div class="s edit-line open-line" data-edit="type" data-cls="${c.id}" title="کلیک: نوع کلاس">${TYPE_ICON[c.type] || '🤖'} ${TYPES[c.type] || 'رباتیک'}</div>
         ${needsStudents(c) ? `<details class="n" onclick="event.stopPropagation()"><summary>🎒 ${fa(c.students.length)}</summary><div class="n">${c.students.map(s => `<span class="mini chip-in" draggable="true" data-type="student" data-id="${s.id}" data-from="${c.id}" title="${esc(s.name)} — بکشید تا خارج شود">${esc(s.name)}</span>`).join('')}</div></details>` : ''}
         ${warn ? `<div class="warn-tag">⚠️ ${warn}</div>` : ''}
         <div class="open-only"><div class="handles"><span class="hmove" title="بکشید: جابه‌جایی ساعت (۳۰ دقیقه‌ای)" onmousedown="startDragTime(event, ${c.id}, 'move')">↕ جابه‌جایی</span><span class="hresize" title="بکشید: تغییر ساعت پایان" onmousedown="startDragTime(event, ${c.id}, 'end')">═ مدت</span></div><button class="btn sm" onclick="event.stopPropagation();openClass(${c.id})">✏️ ویرایش کامل</button></div>

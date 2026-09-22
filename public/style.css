@@ -536,3 +536,9 @@ body.grabbing,body.grabbing *{cursor:grabbing!important}
 
 .btn.save{background:linear-gradient(135deg,#16a34a,#22c55e);box-shadow:0 4px 12px rgba(22,163,74,.35);font-size:15px;padding:10px 22px}
 .btn.save:hover{box-shadow:0 8px 20px rgba(22,163,74,.45)}
+
+/* closed cards: hide type line and empty placeholders; reveal them when opened */
+.board .cls .open-line{display:none}
+.board .cls.open .open-line{display:block}
+.board .cls .no-t .faint{font-size:11px;opacity:.75;text-decoration:none;font-weight:700}
+.board .cls.open .no-t .faint{text-decoration:underline dotted}
