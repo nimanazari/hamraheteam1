@@ -607,3 +607,9 @@ body.dropping .drop-day.over .col-in{background:var(--accent-soft)}
 .board .cls.warn{filter:grayscale(.85) contrast(.95)}
 .board .cls.warn:not(.open){opacity:.92}
 .board .cls.warn.open,body.dropping .board .cls.warn.over{filter:none}
+
+/* colour picker: 30 swatches, taken ones marked */
+.colorbox{position:relative;width:26px;height:26px;border-radius:7px}
+.colorbox.taken::after{content:'';position:absolute;inset:0;border-radius:5px;background:linear-gradient(135deg,transparent 44%,#fff 44%,#fff 56%,transparent 56%);opacity:.9}
+.colorbox.sel{border-color:var(--ink);transform:scale(1.12)}
+.field .row .colorbox{margin:0}
