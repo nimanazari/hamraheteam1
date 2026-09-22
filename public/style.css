@@ -604,9 +604,9 @@ body.dropping .drop-day.over .col-in{background:var(--accent-soft)}
 #class-table{min-width:700px}
 
 /* an incomplete class looks grey until it is complete, then it takes its colour */
-.board .cls.warn{filter:grayscale(.85) contrast(.95)}
-.board .cls.warn:not(.open){opacity:.92}
-.board .cls.warn.open,body.dropping .board .cls.warn.over{filter:none}
+/* incomplete classes keep their colour; only the ⚠️ mark and a dashed edge show it */
+.board .cls.warn{box-shadow:0 2px 8px rgba(0,0,0,.14)}
+.board .cls.warn::before{content:'';position:absolute;inset:0;border:2px dashed rgba(255,255,255,.75);border-radius:8px;pointer-events:none}
 
 /* colour picker: 30 swatches, taken ones marked */
 .colorbox{position:relative;width:26px;height:26px;border-radius:7px}

@@ -207,7 +207,7 @@ let poolTab = 'teachers';
 const TYPES = { public: 'عمومی', robotic: 'رباتیک', private: 'خصوصی' };
 const TYPE_ICON = { public: '🏫', robotic: '🤖', private: '👤' };
 const needsStudents = c => c.type !== 'public';
-const cardColor = c => c.color || (meta.color_mode === 'school' ? (c.school_color || c.teacher_color) : c.teacher_color) || '#94a3b8';
+const cardColor = c => c.color || (meta.color_mode === 'school' ? (c.school_color || c.teacher_color) : (c.teacher_color || c.school_color)) || '#a78bfa';
 const cardWarn = c => c.type === 'public' ? (!c.school_id ? 'مدرسه را انتخاب کنید' : '') : (!c.students.length ? 'دانش‌آموز اضافه کنید' : '');
 let picked = null; // {type, id} for tap-to-place on touch devices
 const TOUCH = matchMedia('(pointer: coarse)').matches;
@@ -999,10 +999,10 @@ async function saveOverride(cid, iso) {
 }
 
 /* ================= TEACHERS ================= */
-const COLORS = [
-  '#5b5bd6', '#0ea5e9', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6', '#ec4899', '#14b8a6', '#f97316', '#64748b',
-  '#2563eb', '#059669', '#d97706', '#dc2626', '#7c3aed', '#db2777', '#0891b2', '#65a30d', '#ea580c', '#475569',
-  '#4f46e5', '#0284c7', '#16a34a', '#a16207', '#b91c1c', '#9333ea', '#be123c', '#0d9488', '#c2410c', '#1e293b'];
+const COLORS = [ // 30 bright, distinct colours — no greys, no blacks
+  '#5b5bd6', '#0ea5e9', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6', '#ec4899', '#14b8a6', '#f97316', '#22c55e',
+  '#3b82f6', '#a855f7', '#eab308', '#06b6d4', '#f43f5e', '#84cc16', '#6366f1', '#d946ef', '#0891b2', '#65a30d',
+  '#2563eb', '#059669', '#dc2626', '#7c3aed', '#db2777', '#ea580c', '#0d9488', '#ca8a04', '#16a34a', '#9333ea'];
 const colorOwner = (hex, selfId) => teachers.find(t => t.id !== selfId && (t.color || '').toLowerCase() === String(hex).toLowerCase());
 const freeColor = selfId => COLORS.find(c => !colorOwner(c, selfId)) || COLORS[teachers.length % COLORS.length];
 function renderTeachers() {
