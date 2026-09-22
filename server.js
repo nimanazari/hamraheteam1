@@ -43,6 +43,9 @@ addCol('teachers', 'tg_chat_id', 'TEXT');
 addCol('teachers', 'tg_code', 'TEXT');
 addCol('teachers', 'perms', 'TEXT');
 addCol('classes', 'color', 'TEXT');
+addCol('students', 'phone', "TEXT DEFAULT ''");
+addCol('students', 'meeting_date', "TEXT DEFAULT ''");
+addCol('students', 'contact_note', "TEXT DEFAULT ''");
 addCol('schools', 'color', 'TEXT');
 const PERMS = ['board', 'calendar', 'teachers', 'students', 'schools', 'reports', 'plans', 'payroll', 'settings'];
 const DEFAULT_PERMS = PERMS.filter(p => p !== 'payroll');
@@ -239,6 +242,7 @@ app.put('/api/overrides', requirePerm('board'), (req, res) => {
 function crud(table, cols, opts = {}) {
   app.get(`/api/${table}`, requireAuth, (req, res) => {
     const rows = db.prepare(`SELECT * FROM ${table} ORDER BY name`).all();
+    if (table === 'students' && !isAdmin(req)) rows.forEach(r => { delete r.phone; delete r.meeting_date; delete r.contact_note; });
     if (table === 'teachers') {
       const ts = db.prepare('SELECT teacher_id, student_id FROM teacher_students').all();
       rows.forEach(r => { r.student_ids = ts.filter(x => x.teacher_id === r.id).map(x => x.student_id); r.perms = r.is_admin ? permsOf(r) : []; if (!isAdmin(req)) { delete r.password; delete r.username; } if (!hasPerm(req, 'payroll')) { delete r.rate_hour; delete r.rate_session; delete r.rate_fixed; } });
@@ -262,7 +266,7 @@ function crud(table, cols, opts = {}) {
 }
 crud('schools', ['name', 'color'], { onDelete: id => { db.prepare('UPDATE students SET school_id=NULL WHERE school_id=?').run(id); db.prepare('UPDATE classes SET school_id=NULL WHERE school_id=?').run(id); } });
 crud('teachers', ['name', 'subject', 'username', 'password', 'color', 'is_admin', 'rate_hour', 'rate_session', 'rate_fixed', 'perms'], { onDelete: id => { db.prepare('UPDATE classes SET teacher_id=NULL WHERE teacher_id=?').run(id); db.prepare('DELETE FROM teacher_students WHERE teacher_id=?').run(id); } });
-crud('students', ['name', 'school_id', 'note', 'active'], { onDelete: id => { db.prepare('DELETE FROM class_students WHERE student_id=?').run(id); db.prepare('DELETE FROM teacher_students WHERE student_id=?').run(id); } });
+crud('students', ['name', 'school_id', 'note', 'active', 'phone', 'meeting_date', 'contact_note'], { onDelete: id => { db.prepare('DELETE FROM class_students WHERE student_id=?').run(id); db.prepare('DELETE FROM teacher_students WHERE student_id=?').run(id); } });
 app.put('/api/teachers/:id/students', requirePerm('board'), (req, res) => {
   db.prepare('DELETE FROM teacher_students WHERE teacher_id=?').run(req.params.id);
   const ins = db.prepare('INSERT OR IGNORE INTO teacher_students VALUES (?,?)');

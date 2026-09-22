@@ -148,6 +148,10 @@
           <label><input type="checkbox" id="ui-tools" style="width:auto" onchange="saveUI()"> نوار ابزار (جستجو، فیلتر دبیر/مدرسه، برگرد/تکرار، نسخه‌ها، تمام‌صفحه)</label>
           <label><input type="checkbox" id="ui-stats" style="width:auto" onchange="saveUI()"> آمار بالای تخته</label>
           <p class="muted" style="font-size:12px;margin-top:8px">میان‌برها همیشه کار می‌کنند: Ctrl+Z برگرد · Ctrl+Y تکرار · Ctrl+C کپی کلاس باز · Ctrl+X بریدن · Ctrl+V چسباندن در روزی که موس رویش است · F تمام‌صفحه · L لیست</p></div>
+        <div class="card" id="phones-card" style="grid-column:1/-1"><h3>📞 شماره‌ها و روز جلسه</h3>
+          <div class="row" style="margin-bottom:8px"><input id="ph-q" placeholder="جستجوی نام یا شماره..." style="width:240px" oninput="renderPhones()"><label><input type="checkbox" id="ph-only" style="width:auto" onchange="renderPhones()"> فقط بدون روز جلسه</label><button class="btn ghost sm" onclick="exportPhones()">⬇️ اکسل</button></div>
+          <p class="muted" style="font-size:12px">هر تغییر همان لحظه ذخیره می‌شود. روز جلسه را با کلیک روی تقویم انتخاب کنید.</p>
+          <div style="overflow:auto;max-height:70vh"><table id="ph-table"></table></div></div>
         <div class="card" id="classes-card" style="grid-column:1/-1"><h3>🗂 کلاس‌های روی تخته</h3>
           <div style="overflow:auto"><table id="class-table"></table></div></div>
         <div class="card" id="colors-card" style="grid-column:1/-1"><h3>🎨 رنگ‌ها</h3>
@@ -211,7 +215,7 @@ async function loadAll() {
   ['#f-teacher', '#rep-teacher', '#c-teacher'].forEach(s => { const v = $(s).value; $(s).innerHTML = '<option value="">همه دبیران</option>' + tOpts; $(s).value = v; });
   ['#f-school', '#pool-school'].forEach(s => { const v = $(s).value; $(s).innerHTML = '<option value="">همه مدارس</option>' + sOpts; $(s).value = v; });
   if (ME && !ME.main) { $$('#v-settings .card').forEach(c => { if (/^رمز مدیر|تلگرام/.test(c.querySelector('h3')?.textContent || '')) c.style.display = 'none'; }); }
-  renderPerms(); renderColors(); renderClassList();
+  renderPerms(); renderColors(); renderClassList(); renderPhones();
   $('#set-slots').value = meta.slots.join('\n'); $('#set-term').value = meta.term_start; $('#set-cstart').value = meta.classes_start; $('#set-end').value = meta.term_end; $('#set-cmode').value = meta.color_mode || 'teacher'; $('#set-g0').value = meta.grid_start || '07:30'; $('#set-g1').value = meta.grid_end || '21:00'; ['#set-term', '#set-cstart', '#set-end', '#pay-from', '#pay-to', '#rep-from', '#rep-to'].forEach(id => { const el = $(id); if (el && !el._j) jalaliInput(el); else if (el) el._j.value = jStr(el.value); }); updateBadge();
   renderBoard(); renderPool(); renderTeachers(); renderStudents(); renderSchools(); refreshUndo();
   if ($('#v-calendar').classList.contains('active')) renderCal();
@@ -843,24 +847,26 @@ async function mergeDup(table, ids) {
 }
 function renderStudents() {
   const q = $('#s-q').value.trim();
-  const list = students.filter(s => !q || s.name.includes(q));
+  const list = students.filter(s => !q || s.name.includes(q) || (s.phone || '').includes(q));
   renderDupBanner('#s-dups', students, 'students');
-  $('#s-table').innerHTML = `<tr><th>#</th><th>نام</th><th>مدرسه</th><th>وضعیت</th><th>کلاس‌ها</th><th></th></tr>` + list.map((s, i) => `<tr style="${s.active ? '' : 'opacity:.5'}">
-    <td>${fa(i + 1)}</td><td><b>${esc(s.name)}</b></td><td>${esc(schoolName(s.school_id)) || '<span class="muted">—</span>'}</td><td>${s.active ? '<span class="chip">فعال</span>' : `<span class="chip" style="background:#fee2e2">${esc(s.note || 'غیرفعال')}</span>`}</td>
+  $('#s-table').innerHTML = `<tr><th>#</th><th>نام</th><th>شماره</th><th>روز جلسه</th><th>مدرسه</th><th>وضعیت</th><th>کلاس‌ها</th><th></th></tr>` + list.map((s, i) => `<tr style="${s.active ? '' : 'opacity:.5'}">
+    <td>${fa(i + 1)}</td><td><b>${esc(s.name)}</b>${s.contact_note ? `<div class="muted" style="font-size:11px">${esc(s.contact_note)}</div>` : ''}</td><td dir="ltr">${esc(s.phone || '—')}</td><td>${s.meeting_date ? jStr(s.meeting_date) : '<span class="muted">—</span>'}</td><td>${esc(schoolName(s.school_id)) || '<span class="muted">—</span>'}</td><td>${s.active ? '<span class="chip">فعال</span>' : `<span class="chip" style="background:#fee2e2">${esc(s.note || 'غیرفعال')}</span>`}</td>
     <td>${classes.filter(c => c.student_ids.includes(s.id)).map(c => `<span class="chip" style="background:${c.teacher_color}22;border-color:${c.teacher_color}55">${meta.days[c.day]} ${fa(c.start)} ${esc(c.teacher_name || '')}</span>`).join(' ')}</td>
     <td><button class="btn ghost sm" onclick="editStudent(${s.id})">ویرایش</button> <button class="btn ghost sm" onclick="del('students',${s.id})">حذف</button></td></tr>`).join('');
 }
 $('#s-q').oninput = renderStudents;
 function editStudent(id) {
   const s = students.find(x => x.id === id) || { name: '', school_id: null, note: '', active: 1 };
+  setTimeout(() => { const d = $('#m-meet'); if (d && !d._j) jalaliInput(d); }, 0);
   openModal(`<h2>${id ? 'ویرایش' : 'افزودن'} دانش‌آموز</h2>
     <div class="field"><label>نام</label><input id="m-name" value="${esc(s.name)}" autofocus oninput="showSimilar('#m-sim', students, this.value, ${id || 0})"><div id="m-sim"></div></div>
     <div class="field"><label>مدرسه</label><select id="m-school"><option value="">—</option>${schools.map(x => `<option value="${x.id}" ${x.id === s.school_id ? 'selected' : ''}>${esc(x.name)}</option>`).join('')}</select></div>
+    <div class="grid3"><div class="field"><label>شماره تماس</label><input id="m-phone" dir="ltr" value="${esc(s.phone || '')}"></div><div class="field"><label>روز جلسه</label><input type="date" id="m-meet" value="${s.meeting_date || ''}"></div><div class="field"><label>توضیحات تماس</label><input id="m-cnote" value="${esc(s.contact_note || '')}"></div></div>
     <div class="grid2"><div class="field"><label>وضعیت</label><select id="m-active"><option value="1" ${s.active ? 'selected' : ''}>فعال</option><option value="0" ${!s.active ? 'selected' : ''}>غیرفعال</option></select></div><div class="field"><label>توضیح</label><input id="m-note" value="${esc(s.note)}"></div></div>
     <div class="row" style="justify-content:flex-end"><button class="btn ghost" onclick="closeModal()">انصراف</button><button class="btn" onclick="saveStudent(${id || 0})">ذخیره</button></div>`);
 }
 async function saveStudent(id) {
-  const body = { name: $('#m-name').value.trim(), school_id: +$('#m-school').value || null, note: $('#m-note').value, active: +$('#m-active').value };
+  const body = { name: $('#m-name').value.trim(), school_id: +$('#m-school').value || null, note: $('#m-note').value, active: +$('#m-active').value, phone: $('#m-phone').value.trim(), meeting_date: $('#m-meet').value, contact_note: $('#m-cnote').value };
   if (!body.name) return toast('نام لازم است', 'bad');
   const sim = similarNames(students, body.name, id || 0);
   if (sim.length && sim[0].score === 3 && !confirm(`«${body.name}» قبلاً ثبت شده. با این حال اضافه شود؟`)) return;
@@ -1013,6 +1019,24 @@ document.addEventListener('keydown', async e => {
   else if ((e.ctrlKey || e.metaKey) && k === 'v' && CLIP) { e.preventDefault(); if (hoverDay == null) return toast('موس را روی روز مقصد ببرید و Ctrl+V بزنید', 'bad'); try { await saveWithConfirm({ ...CLIP, day: hoverDay }); toast('چسبانده شد در ' + meta.days[hoverDay], 'ok'); reloadClasses(); } catch (err) { if (err.message !== 'cancel') toast(err.message, 'bad'); } }
   else if (!e.ctrlKey && !e.metaKey && !e.altKey && $('#v-board').classList.contains('active')) { if (k === 'f') { e.preventDefault(); toggleFull(); } if (k === 'l') { e.preventDefault(); togglePool(); } }
 });
+function renderPhones() {
+  const t = $('#ph-table'); if (!t) return;
+  const q = ($('#ph-q')?.value || '').trim(), only = $('#ph-only')?.checked;
+  const list = students.filter(x => (!q || x.name.includes(q) || (x.phone || '').includes(q)) && (!only || !x.meeting_date));
+  t.innerHTML = `<tr><th>#</th><th>نام</th><th>شماره تماس</th><th>روز جلسه</th><th>توضیحات</th><th>وضعیت</th></tr>` + list.map((x, i) => `<tr style="${x.active ? '' : 'opacity:.55'}">
+    <td>${fa(i + 1)}</td><td><b>${esc(x.name)}</b>${x.note ? `<div class="muted" style="font-size:11px">${esc(x.note)}</div>` : ''}</td>
+    <td><input dir="ltr" value="${esc(x.phone || '')}" placeholder="09..." style="width:140px" onchange="setStudent(${x.id},'phone',this.value)"></td>
+    <td><input type="date" class="ph-date" value="${x.meeting_date || ''}" data-id="${x.id}" style="width:130px"></td>
+    <td><input value="${esc(x.contact_note || '')}" placeholder="مثلاً: تماس گرفته شد، منتظر جواب" onchange="setStudent(${x.id},'contact_note',this.value)"></td>
+    <td>${x.active ? 'فعال' : 'غیرفعال'}</td></tr>`).join('');
+  $$('.ph-date', t).forEach(d => { const id = +d.dataset.id; jalaliInput(d); d.onchange = () => setStudent(id, 'meeting_date', d.value); });
+}
+async function setStudent(id, key, val) { await api('/api/students/' + id, 'PUT', { [key]: String(val || '').trim() }); const x = students.find(s => s.id === id); if (x) x[key] = String(val || '').trim(); toast('ذخیره شد', 'ok'); }
+function exportPhones() {
+  const rows = [['نام', 'شماره', 'روز جلسه', 'توضیحات', 'وضعیت'], ...students.map(x => [x.name, x.phone || '', x.meeting_date ? jStr(x.meeting_date) : '', x.contact_note || '', x.active ? 'فعال' : 'غیرفعال' + (x.note ? ' (' + x.note + ')' : '')])];
+  const csv = '\ufeff' + rows.map(r => r.map(v => '"' + String(v ?? '').replace(/"/g, '""') + '"').join(',')).join('\r\n');
+  const a = document.createElement('a'); a.href = URL.createObjectURL(new Blob([csv], { type: 'text/csv;charset=utf-8' })); a.download = 'phones.csv'; a.click();
+}
 function renderClassList() {
   const t = $('#class-table'); if (!t) return;
   const sorted = [...classes].sort((a, b) => a.day - b.day || a.start.localeCompare(b.start));
