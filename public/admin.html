@@ -896,7 +896,15 @@ function editTeacher(id) {
       <div id="m-perms" style="${t.is_admin ? '' : 'display:none'};margin-top:8px"><label>بخش‌هایی که این مدیر می‌بیند:</label><div class="row" style="gap:8px">${Object.entries(PERM_NAMES).map(([k, v]) => `<label class="chip" style="cursor:pointer"><input type="checkbox" class="m-perm" value="${k}" ${(t.perms || []).includes(k) || (!id && k !== 'payroll') ? 'checked' : ''} style="width:auto;margin:0 0 0 4px"> ${v}</label>`).join('')}</div>
       <p class="muted" style="font-size:11px;margin:6px 0 0">«حقوق» را فقط به کسی بدهید که باید نرخ‌ها و مبالغ همه را ببیند.</p></div>` : ''}
     <div class="field"><label>رنگ در برنامه</label><div class="row">${COLORS.map(c => `<span class="colorbox ${c === t.color ? 'sel' : ''}" style="background:${c}" onclick="$('#m-color').value='${c}';$$('.colorbox').forEach(b=>b.classList.remove('sel'));this.classList.add('sel')"></span>`).join('')}<input type="color" id="m-color" value="${t.color}" class="colorbox" style="padding:2px" title="رنگ دلخواه" onchange="$$('.colorbox').forEach(b=>b.classList.remove('sel'))"></div></div>
-    <div class="row" style="justify-content:flex-end"><button class="btn ghost" onclick="closeModal()">انصراف</button><button class="btn" onclick="saveTeacher(${id || 0})">ذخیره</button></div>`);
+    <div class="row" style="justify-content:space-between;margin-top:6px">${id ? `<button class="btn danger sm" onclick="delTeacher(${id})">🗑 حذف دبیر</button>` : '<span></span>'}<span><button class="btn ghost" onclick="closeModal()">انصراف</button> <button class="btn save" onclick="saveTeacher(${id || 0})">💾 ذخیره</button></span></div>`);
+  setTimeout(() => $('#m-name')?.focus(), 30);
+}
+async function delTeacher(id) {
+  const t = teacherById(id); if (!t) return;
+  const cs = classes.filter(c => c.teacher_id === id);
+  if (!confirm(`دبیر «${t.name}» حذف شود؟${cs.length ? `
+${cs.length} کلاس او بدون دبیر می‌شود (کلاس‌ها حذف نمی‌شوند).` : ''}`)) return;
+  await api('/api/teachers/' + id, 'DELETE'); closeModal(); toast('دبیر حذف شد', 'ok'); loadAll();
 }
 async function saveTeacher(id) {
   const body = { name: $('#m-name').value.trim(), subject: $('#m-subject').value.trim(), username: $('#m-user').value.trim() || null, password: $('#m-pass').value, color: $('#m-color').value };

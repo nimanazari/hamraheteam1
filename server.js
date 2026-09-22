@@ -251,7 +251,8 @@ function crud(table, cols, opts = {}) {
   });
   const perm = requirePerm(table);
   app.post(`/api/${table}`, perm, (req, res) => {
-    const vals = cols.map(c => req.body[c] ?? null);
+    if (table === 'teachers') { if (!req.user.main) { delete req.body.is_admin; delete req.body.perms; delete req.body.rate_hour; delete req.body.rate_session; delete req.body.rate_fixed; } if ('perms' in req.body && typeof req.body.perms !== 'string') req.body.perms = JSON.stringify(req.body.perms || []); }
+    const vals = cols.map(c => { const v = req.body[c]; return (v === undefined || v === null) ? null : (typeof v === 'object' ? JSON.stringify(v) : v); });
     try { const r = db.prepare(`INSERT INTO ${table}(${cols.join(',')}) VALUES (${cols.map(() => '?').join(',')})`).run(...vals); res.json({ id: Number(r.lastInsertRowid) }); }
     catch (e) { res.status(400).json({ error: e.message }); }
   });
@@ -259,6 +260,7 @@ function crud(table, cols, opts = {}) {
     let set = cols.filter(c => c in req.body);
     if (table === 'teachers' && !req.user.main) set = set.filter(c => !['is_admin', 'perms', 'rate_hour', 'rate_session', 'rate_fixed'].includes(c)); // only main admin grants access / sets rates
     if (table === 'teachers' && 'perms' in req.body && typeof req.body.perms !== 'string') req.body.perms = JSON.stringify(req.body.perms || []);
+    if (table === 'teachers') for (const k of set) if (typeof req.body[k] === 'object' && req.body[k] !== null) req.body[k] = JSON.stringify(req.body[k]);
     try { if (set.length) db.prepare(`UPDATE ${table} SET ${set.map(c => `${c}=?`).join(',')} WHERE id=?`).run(...set.map(c => req.body[c]), req.params.id); res.json({ ok: true }); }
     catch (e) { res.status(400).json({ error: e.message }); }
   });
