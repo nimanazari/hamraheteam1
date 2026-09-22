@@ -604,9 +604,8 @@ body.dropping .drop-day.over .col-in{background:var(--accent-soft)}
 #class-table{min-width:700px}
 
 /* an incomplete class looks grey until it is complete, then it takes its colour */
-/* incomplete classes keep their colour; only the ⚠️ mark and a dashed edge show it */
+/* incomplete class: just the ⚠️ mark, no dashed border */
 .board .cls.warn{box-shadow:0 2px 8px rgba(0,0,0,.14)}
-.board .cls.warn::before{content:'';position:absolute;inset:0;border:2px dashed rgba(255,255,255,.75);border-radius:8px;pointer-events:none}
 
 /* colour picker: 30 swatches, taken ones marked */
 .colorbox{position:relative;width:26px;height:26px;border-radius:7px}
@@ -636,3 +635,14 @@ body.dropping .drop-day.over .col-in{background:var(--accent-soft)}
 #v-board:fullscreen .cls details.n,#v-board:fullscreen .cls .mini{font-size:11px}
 #v-board:fullscreen .tt .col h4{font-size:14px}
 #v-board:fullscreen .tt .hr{font-size:11.5px}
+
+/* drag the top/bottom edge of a card to change its time */
+.board .cls .rs{position:absolute;left:0;right:0;height:7px;cursor:ns-resize;z-index:12}
+.board .cls .rs-top{top:0;border-radius:8px 8px 0 0}
+.board .cls .rs-bot{bottom:0;border-radius:0 0 8px 8px}
+.board .cls:hover .rs,.board .cls.open .rs{background:rgba(255,255,255,.45)}
+.board .cls:hover .rs:hover,.board .cls.open .rs:hover{background:#fff}
+.board .cls.open .rs{height:9px}
+body.rs-ing,body.rs-ing *{cursor:ns-resize!important;user-select:none}
+.board .cls.resizing{z-index:40;outline:3px solid #fff;box-shadow:0 10px 26px rgba(0,0,0,.35);transition:none}
+.board .cls[data-live]::after{content:attr(data-live);position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);background:rgba(0,0,0,.6);color:#fff;font-size:12px;font-weight:800;padding:3px 9px;border-radius:8px;white-space:nowrap;z-index:5;font-variant-numeric:tabular-nums}
