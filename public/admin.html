@@ -207,7 +207,7 @@ let poolTab = 'teachers';
 const TYPES = { public: 'عمومی', robotic: 'رباتیک', private: 'خصوصی' };
 const TYPE_ICON = { public: '🏫', robotic: '🤖', private: '👤' };
 const needsStudents = c => c.type !== 'public';
-const cardColor = c => c.color || (meta.color_mode === 'school' ? (c.school_color || c.teacher_color) : c.teacher_color) || '#8b93a7';
+const cardColor = c => c.color || (meta.color_mode === 'school' ? (c.school_color || c.teacher_color) : (c.teacher_color || c.school_color)) || '#6b7280';
 const cardWarn = c => c.type === 'public' ? (!c.school_id ? 'مدرسه را انتخاب کنید' : '') : (!c.students.length ? 'دانش‌آموز اضافه کنید' : '');
 let picked = null; // {type, id} for tap-to-place on touch devices
 const TOUCH = matchMedia('(pointer: coarse)').matches;

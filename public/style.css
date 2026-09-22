@@ -602,3 +602,8 @@ body.dropping .drop-day.over .col-in{background:var(--accent-soft)}
 #colors-body .crow{padding:3px 0;font-size:12px}
 #colors-body .crow input[type=color]{width:28px;height:22px}
 #class-table{min-width:700px}
+
+/* an incomplete class looks grey until it is complete, then it takes its colour */
+.board .cls.warn{filter:grayscale(.85) contrast(.95)}
+.board .cls.warn:not(.open){opacity:.92}
+.board .cls.warn.open,body.dropping .board .cls.warn.over{filter:none}
