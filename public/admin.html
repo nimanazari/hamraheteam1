@@ -207,7 +207,7 @@ let poolTab = 'teachers';
 const TYPES = { public: 'عمومی', robotic: 'رباتیک', private: 'خصوصی' };
 const TYPE_ICON = { public: '🏫', robotic: '🤖', private: '👤' };
 const needsStudents = c => c.type !== 'public';
-const cardColor = c => c.color || (meta.color_mode === 'school' ? (c.school_color || c.teacher_color) : (c.teacher_color || c.school_color)) || '#6b7280';
+const cardColor = c => c.color || (meta.color_mode === 'school' ? (c.school_color || c.teacher_color) : c.teacher_color) || '#94a3b8';
 const cardWarn = c => c.type === 'public' ? (!c.school_id ? 'مدرسه را انتخاب کنید' : '') : (!c.students.length ? 'دانش‌آموز اضافه کنید' : '');
 let picked = null; // {type, id} for tap-to-place on touch devices
 const TOUCH = matchMedia('(pointer: coarse)').matches;
@@ -1310,10 +1310,10 @@ function renderColors() {
   const row = (label, color, onch, extra = '') => `<div class="crow"><input type="color" value="${color}" onchange="${onch}"><span>${label}</span>${extra}</div>`;
   const dupT = {}; teachers.forEach(t => { const k = (t.color || '').toLowerCase(); (dupT[k] = dupT[k] || []).push(t.name); });
   box.innerHTML = `<div><h4 class="muted">دبیران <span style="font-weight:400">(${fa(teachers.length)} نفر · ${fa(COLORS.length)} رنگ آماده)</span></h4>${teachers.map(t => row(esc(t.name), t.color || '#64748b', `setColor('teachers',${t.id},this.value)`, (dupT[(t.color || '').toLowerCase()] || []).length > 1 ? `<span class="x" style="color:var(--bad)" title="رنگ تکراری با: ${esc((dupT[(t.color || '').toLowerCase()] || []).filter(n => n !== t.name).join('، '))}">⚠️ تکراری</span>` : '')).join('')}</div>
-    <div><h4 class="muted">محل‌ها</h4>${schools.map(x => row(esc(x.name), x.color || '#64748b', `setColor('schools',${x.id},this.value)`)).join('')}</div>
+    <div><h4 class="muted">محل‌ها <span style="font-weight:400">(وقتی مبنای رنگ «محل» باشد)</span></h4>${schools.map(x => { const cl = teachers.find(t => (t.color || '').toLowerCase() === (x.color || '').toLowerCase()); return row(esc(x.name), x.color || '#64748b', `setColor('schools',${x.id},this.value)`, cl ? `<span class="x" style="color:var(--warn)" title="مثل رنگ دبیر ${esc(cl.name)}">⚠️</span>` : ''); }).join('')}</div>
     <div><h4 class="muted">کلاس‌ها (رنگ اختصاصی)</h4>${classes.length ? classes.map(c => row(`${meta.days[c.day]} ${fa(c.start)} · ${esc(c.teacher_name || 'بدون دبیر')}${c.school_name ? ' · ' + esc(c.school_name) : ''}`, cardColor(c), `setClassColor(${c.id},this.value)`, c.color ? `<span class="x" title="پیش‌فرض" onclick="setClassColor(${c.id},null)">↺</span>` : '')).join('') : '<span class="muted">کلاسی نیست</span>'}</div>`;
 }
-async function setColor(table, id, color) { const o = table === 'teachers' ? colorOwner(color, id) : null; if (o && !confirm(`این رنگ برای «${o.name}» است. باز هم ثبت شود؟`)) return renderColors(); await api(`/api/${table}/${id}`, 'PUT', { color }); [teachers, schools, classes] = await Promise.all([api('/api/teachers'), api('/api/schools'), api('/api/classes')]); renderColors(); renderBoard(); renderPool(); toast('رنگ ذخیره شد', 'ok'); }
+async function setColor(table, id, color) { const o = table === 'teachers' ? colorOwner(color, id) : teachers.find(t => (t.color || '').toLowerCase() === String(color).toLowerCase()); if (o && !confirm(`این رنگ برای دبیر «${o.name}» است و کارت‌ها شبیه هم می‌شوند. باز هم ثبت شود؟`)) return renderColors(); await api(`/api/${table}/${id}`, 'PUT', { color }); [teachers, schools, classes] = await Promise.all([api('/api/teachers'), api('/api/schools'), api('/api/classes')]); renderColors(); renderBoard(); renderPool(); toast('رنگ ذخیره شد', 'ok'); }
 function renderPerms() {
   const card = $('#perm-card'); if (!ME || !ME.main) { card.style.display = 'none'; return; }
   const keys = Object.keys(PERM_NAMES);
