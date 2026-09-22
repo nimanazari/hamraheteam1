@@ -59,6 +59,7 @@
         </div>
       </div>
       <div id="pick-bar" class="pick-bar"></div>
+      <div class="undo-fab" id="undo-fab"><button id="fab-undo" onclick="undo()" title="برگرد (Ctrl+Z)">↶</button><button id="fab-redo" onclick="redo()" title="تکرار (Ctrl+Shift+Z)">↷</button></div>
     </section>
 
     <!-- ========== CALENDAR ========== -->
@@ -255,7 +256,7 @@ function renderBoard() {
       const st = Math.max(g0, M(c.start)), en = Math.min(g1, M(c.end)); if (en <= st) return '';
       const top = (st - g0) / span * 100, h = (en - st) / span * 100, w = 100 / cl.n, left = k * w;
       const warn = cardWarn(c), mins = en - st;
-      return `<div class="cls drop-cls ${warn ? 'warn' : ''} ${mins < 90 ? 'tiny' : ''}" draggable="true" data-cls="${c.id}" style="background:${cardColor(c)};top:${top.toFixed(3)}%;height:${h.toFixed(3)}%;right:${left.toFixed(3)}%;width:calc(${w.toFixed(3)}% - 3px)" title="${esc(c.teacher_name || '')} · ${fa(c.start)}–${fa(c.end)} · ${esc(c.school_name || '')}${warn ? ' · ⚠️ ' + warn : ''}">
+      return `<div class="cls drop-cls ${warn ? 'warn' : ''} ${mins < 90 ? 'tiny' : ''}" data-cls="${c.id}" style="background:${cardColor(c)};top:${top.toFixed(3)}%;height:${h.toFixed(3)}%;right:${left.toFixed(3)}%;width:calc(${w.toFixed(3)}% - 3px)" title="${esc(c.teacher_name || '')} · ${fa(c.start)}–${fa(c.end)} · ${esc(c.school_name || '')}${warn ? ' · ⚠️ ' + warn : ''}">
         <div class="t"${c.teacher_id ? '' : ''}>${c.teacher_id ? `<span class="chip-in" draggable="true" data-type="teacher" data-id="${c.teacher_id}" data-from="${c.id}" title="بکشید تا از کلاس خارج شود">${esc(c.teacher_name)}</span>` : '<span class="faint">بدون دبیر</span>'}</div>
         <div class="s edit-line" data-edit="slot" data-cls="${c.id}" title="کلیک: تغییر ساعت">⏰ ${fa(c.start)}–${fa(c.end)}</div>
         <div class="s edit-line" data-edit="school" data-cls="${c.id}" title="کلیک: محل برگزاری">📍 ${c.school_name ? esc(c.school_name) : '<span class="faint">محل؟</span>'}</div>
@@ -439,9 +440,8 @@ function bindDrops() {
   $$('.drop-cls').forEach(card => {
     card.ondragover = e => { e.preventDefault(); e.stopPropagation(); card.classList.add('over'); };
     card.ondragleave = () => card.classList.remove('over');
-    card.ondrop = e => { e.preventDefault(); e.stopPropagation(); card.classList.remove('over'); const col = card.closest('.drop-day'); col.classList.remove('over'); const item = JSON.parse(e.dataTransfer.getData('text/plain')); if (item.type === 'class') return col.ondrop(Object.assign(e, { _forwarded: true })); handleDrop(item, { cls: +card.dataset.cls }); };
-    card.ondragstart = e => { if (e.target !== card && e.target.closest('.chip-in')) return; e.dataTransfer.setData('text/plain', JSON.stringify({ type: 'class', id: +card.dataset.cls })); e.dataTransfer.effectAllowed = 'move'; try { const r = card.getBoundingClientRect(); e.dataTransfer.setDragImage(card, e.clientX - r.left, e.clientY - r.top); } catch {} card.classList.add('dragging'); };
-    card.ondragend = () => card.classList.remove('dragging');
+    card.ondrop = e => { e.preventDefault(); e.stopPropagation(); card.classList.remove('over'); card.closest('.drop-day').classList.remove('over'); handleDrop(JSON.parse(e.dataTransfer.getData('text/plain')), { cls: +card.dataset.cls }); };
+    card.onmousedown = e => startCardDrag(e, card);
     card.onclick = e => { e.stopPropagation(); if (picked) { const p = picked; unpick(); return handleDrop(p, { cls: +card.dataset.cls }); } const was = card.classList.contains('open'); $$('.cls.open').forEach(x => x.classList.remove('open')); if (!was) card.classList.add('open'); };
     card.ondblclick = e => { e.stopPropagation(); openClass(+card.dataset.cls); };
     card.oncontextmenu = e => { e.preventDefault(); e.stopPropagation(); showCtx(e, +card.dataset.cls); };
@@ -478,7 +478,7 @@ async function handleDrop(item, target) {
       const body = { ...bodyOf(c), day: target.day }; if (target.at && target.at !== c.start) { const dur = M(c.end) - M(c.start); body.start = target.at; body.end = F(Math.min(23 * 60 + 59, M(target.at) + dur)); }
       if (c.day === target.day && body.start === c.start) return;
       await saveWithConfirm(body, c.id);
-      toast('کلاس جابه‌جا شد', 'ok');
+      toastUndo('کلاس جابه‌جا شد');
     } else if (target.cls) {
       const c = classes.find(x => x.id === target.cls);
       const body = bodyOf(c);
@@ -574,6 +574,49 @@ function showCtx(e, id) {
   m.style.left = x + 'px'; m.style.top = y + 'px';
   setTimeout(() => document.addEventListener('click', () => m.remove(), { once: true }), 0);
 }
+const MIN = t => +String(t).slice(0, 2) * 60 + +String(t).slice(3);
+const HM = m => `${String(Math.floor(m / 60)).padStart(2, '0')}:${String(m % 60).padStart(2, '0')}`;
+function startCardDrag(e, card) {
+  if (e.button !== 0) return;
+  if (e.target.closest('.chip-in,.edit-line,input,button,select,summary,details,.handles,.open-only,.color-line,.warn-tag')) return;
+  const id = +card.dataset.cls, c = classes.find(x => x.id === id); if (!c) return;
+  e.preventDefault();
+  const g0 = MIN(meta.grid_start || '07:30'), g1 = MIN(meta.grid_end || '21:00'), span = g1 - g0, dur = MIN(c.end) - MIN(c.start);
+  const grabY = e.clientY - card.getBoundingClientRect().top, sx = e.clientX, sy = e.clientY;
+  let moved = false, prev = null, tgt = null;
+  const onMove = ev => {
+    if (!moved) { if (Math.abs(ev.clientX - sx) < 5 && Math.abs(ev.clientY - sy) < 5) return; moved = true; card.classList.add('drag-src'); document.body.classList.add('grabbing'); }
+    const cols = $$('#tt .drop-day');
+    const col = cols.find(cc => { const r = cc.getBoundingClientRect(); return ev.clientX >= r.left && ev.clientX <= r.right; }) || cols.find(cc => +cc.dataset.day === c.day);
+    if (!col) return;
+    const inner = col.querySelector('.col-in'), r = inner.getBoundingClientRect();
+    const step = ev.shiftKey ? 5 : 30;
+    let mins = Math.round((g0 + ((ev.clientY - grabY - r.top) / r.height) * span) / step) * step;
+    mins = Math.max(g0, Math.min(g1 - dur, mins));
+    tgt = { day: +col.dataset.day, at: HM(mins) };
+    if (!prev) { prev = document.createElement('div'); prev.className = 'drag-prev'; }
+    if (prev.parentElement !== inner) inner.appendChild(prev);
+    prev.style.background = cardColor(c);
+    prev.style.top = ((mins - g0) / span * 100).toFixed(3) + '%';
+    prev.style.height = (dur / span * 100).toFixed(3) + '%';
+    prev.innerHTML = `<b>${esc(c.teacher_name || clsLabel(c))}</b><span>${fa(HM(mins))}–${fa(HM(mins + dur))}</span>`;
+  };
+  const onUp = async () => {
+    document.removeEventListener('mousemove', onMove); document.removeEventListener('mouseup', onUp);
+    card.classList.remove('drag-src'); document.body.classList.remove('grabbing'); prev?.remove();
+    if (!moved || !tgt || (tgt.day === c.day && tgt.at === c.start)) return;
+    const body = bodyOf(c); body.day = tgt.day; body.start = tgt.at; body.end = HM(MIN(tgt.at) + dur);
+    try { await saveWithConfirm(body, id); await reloadClasses(); toastUndo(`${meta.days[tgt.day]} · ${fa(tgt.at)}–${fa(body.end)}`); }
+    catch (err) { renderBoard(); if (err.message !== 'cancel') toast(err.message, 'bad'); }
+  };
+  document.addEventListener('mousemove', onMove); document.addEventListener('mouseup', onUp);
+}
+function toastUndo(msg) {
+  let el = $('.toast'); if (!el) { el = document.createElement('div'); el.className = 'toast'; document.body.appendChild(el); }
+  el.innerHTML = `<span>${esc(msg)}</span><button class="btn ghost sm" style="margin-right:10px" onclick="undo()">↶ برگرد</button>`;
+  el.className = 'toast show ok';
+  clearTimeout(window._tu); window._tu = setTimeout(() => el.classList.remove('show'), 7000);
+}
 function startDragTime(e, id, mode) {
   e.preventDefault(); e.stopPropagation();
   const c = classes.find(x => x.id === id); const card = e.target.closest('.cls'); const colIn = card.closest('.col-in'); const r = colIn.getBoundingClientRect();
@@ -599,10 +642,10 @@ function startDragTime(e, id, mode) {
 function toggleFull() { const el = $('#v-board'); if (document.fullscreenElement) document.exitFullscreen(); else el.requestFullscreen?.(); }
 document.addEventListener('click', e => { if (!e.target.closest('.cls')) $$('.cls.open').forEach(x => x.classList.remove('open')); });
 document.addEventListener('fullscreenchange', () => document.body.classList.toggle('fs', !!document.fullscreenElement));
-async function undo() { try { const r = await api('/api/undo', 'POST'); toast('برگشت: ' + r.label, 'ok'); reloadClasses(); } catch (e) { toast(e.message, 'bad'); } }
-async function redo() { try { const r = await api('/api/redo', 'POST'); toast('تکرار: ' + r.label, 'ok'); reloadClasses(); } catch (e) { toast(e.message, 'bad'); } }
-async function refreshUndo() { try { const s = await api('/api/snapshots'); $('#btn-undo').disabled = !s.canUndo; $('#btn-redo').disabled = !s.canRedo; } catch {} }
-document.addEventListener('keydown', e => { if ((e.ctrlKey || e.metaKey) && !e.target.matches('input,textarea,select')) { if (e.key === 'z') { e.preventDefault(); undo(); } if (e.key === 'y') { e.preventDefault(); redo(); } } });
+async function undo() { try { const r = await api('/api/undo', 'POST'); toast('↶ برگشت: ' + r.label, 'ok'); await reloadClasses(); if ($('#v-settings').classList.contains('active')) renderClassList(); } catch (e) { toast(e.message, 'bad'); } }
+async function redo() { try { const r = await api('/api/redo', 'POST'); toast('↷ تکرار: ' + r.label, 'ok'); await reloadClasses(); if ($('#v-settings').classList.contains('active')) renderClassList(); } catch (e) { toast(e.message, 'bad'); } }
+async function refreshUndo() { try { const s = await api('/api/snapshots'); const b = $('#btn-undo'), r = $('#btn-redo'); if (b) b.disabled = !s.canUndo; if (r) r.disabled = !s.canRedo; const fu = $('#fab-undo'), fr = $('#fab-redo'); if (fu) { fu.disabled = !s.canUndo; fr.disabled = !s.canRedo; $('#undo-fab').style.display = (s.canUndo || s.canRedo) ? '' : 'none'; } } catch {} }
+
 async function openHistory() {
   const s = await api('/api/snapshots');
   const KIND = { auto: 'خودکار', manual: 'دستی', restore: 'قبل از بازگردانی' };
@@ -1013,11 +1056,19 @@ document.addEventListener('DOMContentLoaded', applyUI);
 let CLIP = null, hoverDay = null;
 document.addEventListener('mouseover', e => { const col = e.target.closest?.('.drop-day'); if (col) hoverDay = +col.dataset.day; });
 document.addEventListener('keydown', async e => {
-  if (e.target.matches('input,textarea,select') || $('#overlay').classList.contains('show')) return;
-  const open = $('.cls.open'); const k = e.key.toLowerCase();
-  if ((e.ctrlKey || e.metaKey) && (k === 'c' || k === 'x') && open) { e.preventDefault(); const c = classes.find(x => x.id === +open.dataset.cls); CLIP = bodyOf(c); toast(k === 'c' ? 'کپی شد؛ روی روز مقصد Ctrl+V' : 'بریده شد؛ روی روز مقصد Ctrl+V'); if (k === 'x') { await api('/api/classes/' + c.id, 'DELETE'); reloadClasses(); } }
-  else if ((e.ctrlKey || e.metaKey) && k === 'v' && CLIP) { e.preventDefault(); if (hoverDay == null) return toast('موس را روی روز مقصد ببرید و Ctrl+V بزنید', 'bad'); try { await saveWithConfirm({ ...CLIP, day: hoverDay }); toast('چسبانده شد در ' + meta.days[hoverDay], 'ok'); reloadClasses(); } catch (err) { if (err.message !== 'cancel') toast(err.message, 'bad'); } }
-  else if (!e.ctrlKey && !e.metaKey && !e.altKey && $('#v-board').classList.contains('active')) { if (k === 'f') { e.preventDefault(); toggleFull(); } if (k === 'l') { e.preventDefault(); togglePool(); } }
+  const el = e.target instanceof Element ? e.target : document.body;
+  const typing = el.matches('textarea,input[type=text],input:not([type]),input[type=password],input[type=number],[contenteditable=true]');
+  const modal = $('#overlay').classList.contains('show');
+  const ctrl = e.ctrlKey || e.metaKey, code = e.code; // e.code is layout-independent (works with the Persian keyboard too)
+  if (ctrl && !typing && !modal) {
+    if (code === 'KeyZ') { e.preventDefault(); return e.shiftKey ? redo() : undo(); }
+    if (code === 'KeyY') { e.preventDefault(); return redo(); }
+  }
+  if (typing || modal) return;
+  const open = $('.cls.open');
+  if (ctrl && (code === 'KeyC' || code === 'KeyX') && open) { e.preventDefault(); const c = classes.find(x => x.id === +open.dataset.cls); CLIP = bodyOf(c); toast(code === 'KeyC' ? 'کپی شد؛ روی روز مقصد Ctrl+V' : 'بریده شد؛ روی روز مقصد Ctrl+V'); if (code === 'KeyX') { await api('/api/classes/' + c.id, 'DELETE'); reloadClasses(); } }
+  else if (ctrl && code === 'KeyV' && CLIP) { e.preventDefault(); if (hoverDay == null) return toast('موس را روی روز مقصد ببرید و Ctrl+V بزنید', 'bad'); try { await saveWithConfirm({ ...CLIP, day: hoverDay }); toastUndo('چسبانده شد در ' + meta.days[hoverDay]); reloadClasses(); } catch (err) { if (err.message !== 'cancel') toast(err.message, 'bad'); } }
+  else if (!ctrl && !e.altKey && $('#v-board').classList.contains('active')) { if (code === 'KeyF') { e.preventDefault(); toggleFull(); } if (code === 'KeyL') { e.preventDefault(); togglePool(); } }
 });
 function renderPhones() {
   const t = $('#ph-table'); if (!t) return;
