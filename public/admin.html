@@ -155,6 +155,9 @@
           <label><input type="checkbox" id="ui-tools" style="width:auto" onchange="saveUI()"> نوار ابزار (جستجو، فیلتر دبیر/مدرسه، برگرد/تکرار، نسخه‌ها، تمام‌صفحه)</label>
           <label><input type="checkbox" id="ui-stats" style="width:auto" onchange="saveUI()"> آمار بالای تخته</label>
           <p class="muted" style="font-size:12px;margin-top:8px">میان‌برها همیشه کار می‌کنند: Ctrl+Z برگرد · Ctrl+Y تکرار · Ctrl+C کپی کلاس باز · Ctrl+X بریدن · Ctrl+V چسباندن در روزی که موس رویش است · F تمام‌صفحه · L لیست</p></div>
+        <div class="card" id="demand-card" style="grid-column:1/-1"><h3>📊 داوطلب هر تایم (زنده)</h3>
+          <div class="row" style="margin-bottom:6px"><label style="margin:0">حداکثر نفر همزمان در آکادمی</label><input type="number" id="set-cap" min="1" max="200" style="width:70px" onchange="saveCap()"><span class="muted" style="font-size:11.5px">«داوطلب» یعنی خانواده‌اش آن روز و ساعت را پیشنهاد داده. اگر از جای خالی بیشتر شود قرمز می‌شود.</span></div>
+          <div style="overflow-x:auto"><table id="demand-table"></table></div></div>
         <div class="card" id="phones-card" style="grid-column:1/-1"><h3>📞 شماره‌ها و روز جلسه</h3>
           <div class="row" style="margin-bottom:8px"><input id="ph-q" placeholder="جستجوی نام یا شماره..." style="width:240px" oninput="renderPhones()"><label><input type="checkbox" id="ph-only" style="width:auto" onchange="renderPhones()"> فقط بدون روز پیشنهادی</label><label><input type="checkbox" id="ph-off" style="width:auto" onchange="renderPhones()"> فقط دارای تخفیف</label><button class="btn ghost sm" onclick="exportPhones()">⬇️ اکسل</button></div>
           <p class="muted" style="font-size:12px">هر تغییر همان لحظه ذخیره می‌شود. روز جلسه را با کلیک روی تقویم انتخاب کنید.</p>
@@ -222,7 +225,7 @@ async function loadAll() {
   ['#f-teacher', '#rep-teacher', '#c-teacher'].forEach(s => { const v = $(s).value; $(s).innerHTML = '<option value="">همه دبیران</option>' + tOpts; $(s).value = v; });
   ['#f-school', '#pool-school'].forEach(s => { const v = $(s).value; $(s).innerHTML = '<option value="">همه مدارس</option>' + sOpts; $(s).value = v; });
   if (ME && !ME.main) { $$('#v-settings .card').forEach(c => { if (/^رمز مدیر|تلگرام/.test(c.querySelector('h3')?.textContent || '')) c.style.display = 'none'; }); }
-  renderPerms(); renderColors(); renderClassList(); renderPhones();
+  renderPerms(); renderColors(); renderClassList(); renderPhones(); renderDemand(); $('#set-cap').value = CAP();
   $('#set-slots').value = meta.slots.join('\n'); $('#set-term').value = meta.term_start; $('#set-cstart').value = meta.classes_start; $('#set-end').value = meta.term_end; $('#set-cmode').value = meta.color_mode || 'teacher'; $('#set-g0').value = meta.grid_start || '07:30'; $('#set-g1').value = meta.grid_end || '21:00'; ['#set-term', '#set-cstart', '#set-end', '#pay-from', '#pay-to', '#rep-from', '#rep-to'].forEach(id => { const el = $(id); if (el && !el._j) jalaliInput(el); else if (el) el._j.value = jStr(el.value); }); updateBadge();
   $('#q-list').innerHTML = [...teachers.map(t => t.name), ...students.map(s => s.name), ...schools.map(s => s.name)].map(n => `<option value="${esc(n)}">`).join('');
   renderBoard(); renderPool(); renderTeachers(); renderStudents(); renderSchools(); refreshUndo();
@@ -804,7 +807,7 @@ function openAuto() {
     <p class="muted" style="font-size:12px">دانش‌آموزها بر اساس «روز و ساعت پیشنهادی خانواده» در کلاس‌های موجود همان روز پخش می‌شوند. سقف همزمانی آکادمی رعایت می‌شود و تایم‌های یک روز تا جای ممکن هم‌اندازه پر می‌شوند. تا وقتی «اعمال» نزنید چیزی ذخیره نمی‌شود.</p>
     <div class="grid3">
       <div class="field"><label>روزها</label><div class="row" style="gap:10px">${meta.days.map((d, i) => `<label class="chip" style="cursor:pointer"><input type="checkbox" class="au-day" value="${i}" ${days.includes(i) ? 'checked' : ''} style="width:auto;margin-left:4px">${d}</label>`).join('')}</div></div>
-      <div class="field"><label>حداکثر نفر در هر تایم آکادمی</label><input type="number" id="au-cap" value="20" min="1" max="200"></div>
+      <div class="field"><label>حداکثر نفر در هر تایم آکادمی</label><input type="number" id="au-cap" value="${CAP()}" min="1" max="200"></div>
       <div class="field"><label>شامل چه کسانی</label><select id="au-inc"><option value="0">فقط دانش‌آموزهای بدون کلاس</option><option value="1">همه (حتی اگر کلاس دارند)</option></select></div>
     </div>
     <button class="btn" onclick="runAuto()">🔄 محاسبه</button>
@@ -1276,6 +1279,7 @@ async function delPayment(id) { if (!confirm('حذف شود؟')) return; await a
 $('#rep-teacher').onchange = loadReports;
 
 /* ================= SETTINGS ================= */
+async function saveCap() { await api('/api/meta/term', 'PUT', { capacity: +$('#set-cap').value || 20 }); meta.capacity = +$('#set-cap').value || 20; renderDemand(); toast('ذخیره شد', 'ok'); }
 async function saveSlots() { await api('/api/meta/slots', 'PUT', { slots: $('#set-slots').value.split('\n').map(s => s.trim()).filter(s => /^\d{1,2}:\d{2}-\d{1,2}:\d{2}$/.test(s)) }); toast('ذخیره شد', 'ok'); loadAll(); }
 async function saveTerm() { await api('/api/meta/term', 'PUT', { term_start: $('#set-term').value, classes_start: $('#set-cstart').value, term_end: $('#set-end').value, color_mode: $('#set-cmode').value, grid_start: $('#set-g0').value, grid_end: $('#set-g1').value }); toast('ذخیره شد', 'ok'); loadAll(); }
 async function loadTg() {
@@ -1314,7 +1318,17 @@ const availShort = x => availOf(x).map(a => `${meta.days[a.day].slice(0, 2)}${a.
 async function setAvail(id, list) {
   await api('/api/students/' + id, 'PUT', { avail: JSON.stringify(list) });
   const x = students.find(s => s.id === id); if (x) x.avail = JSON.stringify(list);
-  renderPhones(); renderPool(); toast('ذخیره شد', 'ok');
+  renderPhones(); renderPool(); renderDemand();
+  const warn = overSlots(list);
+  toast(warn ? `ذخیره شد · ⚠️ ${warn}` : 'ذخیره شد', warn ? 'bad' : 'ok');
+}
+function overSlots(list) {
+  const cap = CAP(), rows = demandRows();
+  for (const a of list || []) {
+    const r = rows.find(x => x.day === +a.day && (!a.start || (a.start <= x.start && (!a.end || a.end >= x.end))));
+    if (r && r.vol.size > cap - r.booked) return `${meta.days[r.day]} ${fa(r.start)} پر است (${fa(r.vol.size)} داوطلب برای ${fa(Math.max(0, cap - r.booked))} جا)`;
+  }
+  return '';
 }
 function availRows(x) {
   const a = availOf(x);
@@ -1322,12 +1336,47 @@ function availRows(x) {
       <select onchange="avEdit(${x.id},${i},'day',this.value)">${meta.days.map((d, di) => `<option value="${di}" ${di === +r.day ? 'selected' : ''}>${d}</option>`).join('')}</select>
       <input type="time" value="${r.start || ''}" step="900" onchange="avEdit(${x.id},${i},'start',this.value)">
       <b>تا</b><input type="time" value="${r.end || ''}" step="900" onchange="avEdit(${x.id},${i},'end',this.value)">
-      <i onclick="avDel(${x.id},${i})" title="حذف">✕</i></span>`).join('')}
+      <i onclick="avDel(${x.id},${i})" title="حذف">✕</i>${slotBadge(r)}</span>`).join('')}
     <button class="btn ghost sm" onclick="avAdd(${x.id})">+ افزودن روز</button></div>`;
+}
+function slotBadge(a) {
+  const cap = CAP(), r = demandRows().find(x => x.day === +a.day && (!a.start || (a.start <= x.start && (!a.end || a.end >= x.end))));
+  if (!r) return '';
+  const free = cap - r.booked;
+  return `<b class="slotb ${r.vol.size > free ? 'bad' : ''}" title="داوطلب ${r.vol.size} · ثبت‌شده ${r.booked} · ظرفیت ${cap}">${fa(r.vol.size)}/${fa(Math.max(0, free))}</b>`;
 }
 function avAdd(id) { const a = availOf(students.find(s => s.id === id)); a.push({ day: 5, start: '10:00', end: '12:00', note: '' }); setAvail(id, a); }
 function avDel(id, i) { const a = availOf(students.find(s => s.id === id)); a.splice(i, 1); setAvail(id, a); }
 function avEdit(id, i, key, val) { const a = availOf(students.find(s => s.id === id)); if (!a[i]) return; a[i][key] = key === 'day' ? +val : val; setAvail(id, a); }
+const CAP = () => +(meta.capacity || 20);
+// students whose family suggested a window that covers this class
+const volunteersFor = c => students.filter(x => x.active && fitsAvail(x, c));
+// everyone in the academy at that day+time (all overlapping classes)
+const loadAt = (day, start) => classes.filter(c => c.day === day && c.start === start).reduce((a, c) => a + c.students.length, 0);
+function demandRows() {
+  const seen = {};
+  classes.filter(c => c.type !== 'public').forEach(c => {
+    const k = `${c.day}|${c.start}|${c.end}`;
+    (seen[k] = seen[k] || { day: c.day, start: c.start, end: c.end, classes: [], booked: 0, vol: new Set() }).classes.push(c);
+    seen[k].booked += c.students.length;
+    volunteersFor(c).forEach(v => seen[k].vol.add(v.id));
+  });
+  return Object.values(seen).sort((a, b) => a.day - b.day || a.start.localeCompare(b.start));
+}
+function renderDemand() {
+  const t = $('#demand-table'); if (!t) return;
+  const cap = CAP(), rows = demandRows();
+  t.innerHTML = `<tr><th>روز</th><th>تایم</th><th>کلاس‌ها</th><th>ثبت‌شده</th><th>داوطلب</th><th>ظرفیت ${fa(cap)}</th></tr>` + (rows.map(r => {
+    const free = cap - r.booked, over = r.vol.size > free;
+    const pct = Math.min(100, Math.round(r.booked / cap * 100));
+    return `<tr class="${r.booked >= cap ? 'full' : over ? 'over' : ''}">
+      <td>${meta.days[r.day]}</td><td>${fa(r.start)}–${fa(r.end)}</td>
+      <td>${r.classes.map(c => `<span class="chip" style="border-color:${cardColor(c)}">${esc(c.teacher_name || c.school_name || 'کلاس')}</span>`).join(' ')}</td>
+      <td><b>${fa(r.booked)}</b></td>
+      <td><b style="color:${over ? 'var(--bad)' : 'var(--ok)'}">${fa(r.vol.size)}</b></td>
+      <td><div class="bar"><i style="width:${pct}%;background:${r.booked >= cap ? 'var(--bad)' : 'var(--ok)'}"></i></div>${r.booked >= cap ? '<span class="muted">پر شد</span>' : `<span class="muted">${fa(free)} جای خالی</span>`}</td></tr>`;
+  }).join('') || '<tr><td colspan="6" class="muted">کلاسی نیست</td></tr>');
+}
 function renderPhones() {
   const t = $('#ph-table'); if (!t) return;
   const q = ($('#ph-q')?.value || '').trim(), only = $('#ph-only')?.checked;

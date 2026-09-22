@@ -650,3 +650,15 @@ body.rs-ing,body.rs-ing *{cursor:ns-resize!important;user-select:none}
 /* 10% discount badge */
 .off10{display:inline-block;background:#dcfce7;color:#166534;border:1px solid #86efac;border-radius:999px;padding:0 6px;font-size:10.5px;font-weight:900;margin-left:5px;vertical-align:middle}
 :root[data-theme=dark] .off10{background:#14532d;color:#bbf7d0;border-color:#166534}
+
+/* demand table */
+#demand-table .bar{height:7px;border-radius:99px;background:var(--line);overflow:hidden;min-width:70px;display:inline-block;vertical-align:middle;margin-left:6px}
+#demand-table .bar i{display:block;height:100%}
+#demand-table tr.over td{background:#fff7ed}
+#demand-table tr.full td{background:#fef2f2}
+:root[data-theme=dark] #demand-table tr.over td{background:#3a2a10}
+:root[data-theme=dark] #demand-table tr.full td{background:#3b1d24}
+.slotb{background:#dcfce7;color:#166534;border-radius:6px;padding:0 5px;font-size:10px;font-weight:900;margin-right:3px}
+.slotb.bad{background:#fee2e2;color:#991b1b}
+:root[data-theme=dark] .slotb{background:#14532d;color:#bbf7d0}
+:root[data-theme=dark] .slotb.bad{background:#3b1d24;color:#fca5a5}
