@@ -290,6 +290,7 @@ function renderBoard() {
         <div class="s edit-line" data-edit="school" data-cls="${c.id}" title="کلیک: محل برگزاری">📍 ${c.school_name ? esc(c.school_name) : '<span class="faint">محل؟</span>'}</div>
         ${c.title ? `<div class="s edit-line" data-edit="title" data-cls="${c.id}" title="کلیک: نام کلاس">🏷 ${esc(c.title)}</div>` : ''}
         ${!c.title && c.type === 'robotic' ? `<div class="s edit-line open-line" data-edit="title" data-cls="${c.id}" title="کلیک: نام کلاس">🏷 <span class="faint">نام کلاس</span></div>` : ''}
+        ${c.assistant_names && c.assistant_names.length ? `<div class="s open-line">👥 ${c.assistant_names.map(esc).join('، ')}</div>` : ''}
         <div class="s edit-line open-line" data-edit="type" data-cls="${c.id}" title="کلیک: نوع کلاس">${TYPE_ICON[c.type] || '🤖'} ${TYPES[c.type] || 'رباتیک'}</div>
         ${needsStudents(c) ? `<details class="n" onclick="event.stopPropagation()"><summary>🎒 ${fa(c.students.length)}</summary><div class="n">${c.students.map(s => `<span class="mini chip-in" draggable="true" data-type="student" data-id="${s.id}" data-from="${c.id}" title="${esc(s.name)} — بکشید تا خارج شود">${esc(s.name)}</span>`).join('')}</div></details>` : ''}
         <div class="rs rs-top" title="بکشید: ساعت شروع" onmousedown="startResize(event, ${c.id}, 'start')"></div>
@@ -358,7 +359,7 @@ const jDay = new Intl.DateTimeFormat('fa-IR-u-ca-persian', { weekday: 'long', da
 async function openTeacher(tid) {
   const t = teacherById(tid); if (!t) return;
   const reps = await api('/api/reports?teacher_id=' + tid);
-  const mine = classes.filter(c => c.teacher_id === tid);
+  const mine = classes.filter(c => c.teacher_id === tid || (c.assistant_ids || []).includes(tid));
   const today = todayISO();
   const sessions = [];
   for (let iso = meta.classes_start; iso <= meta.term_end; iso = addDays(iso, 1)) {
@@ -575,7 +576,7 @@ async function handleDrop(item, target) {
     await reloadClasses();
   } catch (e) { if (e.message !== 'cancel') toast(e.message, 'bad'); }
 }
-const bodyOf = c => ({ color: c.color || null, type: c.type || 'robotic', title: c.title, teacher_id: c.teacher_id, school_id: c.school_id, day: c.day, start: c.start, end: c.end, note: c.note, student_ids: [...c.student_ids] });
+const bodyOf = c => ({ assistant_ids: [...(c.assistant_ids || [])], color: c.color || null, type: c.type || 'robotic', title: c.title, teacher_id: c.teacher_id, school_id: c.school_id, day: c.day, start: c.start, end: c.end, note: c.note, student_ids: [...c.student_ids] });
 async function saveWithConfirm(body, id, force = false) {
   try {
     const r = id ? await api('/api/classes/' + id, 'PUT', { ...body, force }) : await api('/api/classes', 'POST', { ...body, force });
@@ -873,11 +874,14 @@ function openClass(id) {
       <div class="field"><label>میان‌بر</label><div class="row" style="gap:4px">${meta.slots.map(x => `<button type="button" class="btn ghost sm" onclick="const [a,b]='${x}'.split('-');$('#m-start').value=a;$('#m-end').value=b">${fa(x.replace('-', '–'))}</button>`).join('')}</div></div>
     </div>
     <div class="field"><label>یادداشت</label><input id="m-note" value="${esc(c.note)}"></div>
+    <div class="field"><label>دبیران دیگر این کلاس (در پنل خودشان مثل کلاس عادی دیده می‌شود)</label>
+      <div id="m-asst" class="row" style="gap:6px;margin-bottom:6px"></div>
+      <select id="m-asst-add" onchange="addAsst(this.value); this.value=''"><option value="">+ افزودن دبیر</option>${teachers.map(t => `<option value="${t.id}">${esc(t.name)}</option>`).join('')}</select></div>
     <label>دانش‌آموزان (<span id="m-count">${fa(c.students.length)}</span>)</label>
     <div class="dropzone" id="m-members" style="min-height:70px;padding:10px"></div>
     <div class="row" style="margin-top:8px"><input id="m-add" list="m-list" placeholder="افزودن دانش‌آموز: نام را بنویسید و Enter بزنید" class="grow"><datalist id="m-list">${students.map(s => `<option value="${esc(s.name)}">`).join('')}</datalist></div>
     </div>`);
-  renderMembers();
+  renderMembers(); renderAsst();
   $('#m-add').onkeydown = async e => {
     if (e.key !== 'Enter') return; e.preventDefault();
     const name = e.target.value.trim(); if (!name) return;
@@ -893,12 +897,23 @@ function openClass(id) {
     e.target.value = '';
   };
 }
+function renderAsst() {
+  const box = $('#m-asst'); if (!box) return;
+  box.innerHTML = (M.body.assistant_ids || []).map(id => { const t = teacherById(id); return t ? `<span class="chip" style="border-color:${t.color}"><span class="dot" style="background:${t.color}"></span>${esc(t.name)}<span class="x" onclick="M.body.assistant_ids=M.body.assistant_ids.filter(x=>x!==${id});renderAsst()">✕</span></span>` : ''; }).join('') || '<span class="muted" style="font-size:12px">ندارد</span>';
+}
+function addAsst(v) {
+  const id = +v; if (!id) return;
+  M.body.assistant_ids = M.body.assistant_ids || [];
+  if (id === M.body.teacher_id) return toast('این دبیر، دبیر اصلی همین کلاس است');
+  if (!M.body.assistant_ids.includes(id)) M.body.assistant_ids.push(id);
+  renderAsst();
+}
 function renderMembers() {
   const box = $('#m-members'); if (!box) return;
   $('#m-count').textContent = fa(M.body.student_ids.length);
   box.innerHTML = M.body.student_ids.map(id => { const s = students.find(x => x.id === id); return s ? `<div class="member"><span>${esc(s.name)}</span><span class="x" onclick="M.body.student_ids=M.body.student_ids.filter(x=>x!==${id});renderMembers()">✕</span></div>` : ''; }).join('') || '<div class="hint" style="padding:12px">بدون دانش‌آموز</div>';
 }
-function patchLocal(id, body) { const c = classes.find(x => x.id === id); if (!c) return; Object.assign(c, body); c.students = (body.student_ids || c.student_ids || []).map(sid => students.find(s => s.id === sid)).filter(Boolean); c.student_ids = c.students.map(s => s.id); const t = teacherById(body.teacher_id); c.teacher_name = t ? t.name : null; c.teacher_color = t ? t.color : null; const sc = schools.find(x => x.id === body.school_id); c.school_name = sc ? sc.name : null; c.school_color = sc ? sc.color : null; renderBoard(); }
+function patchLocal(id, body) { const c = classes.find(x => x.id === id); if (!c) return; Object.assign(c, body); c.assistant_ids = [...(body.assistant_ids || [])]; c.assistant_names = c.assistant_ids.map(i => teacherById(i)?.name).filter(Boolean); c.students = (body.student_ids || c.student_ids || []).map(sid => students.find(s => s.id === sid)).filter(Boolean); c.student_ids = c.students.map(s => s.id); const t = teacherById(body.teacher_id); c.teacher_name = t ? t.name : null; c.teacher_color = t ? t.color : null; const sc = schools.find(x => x.id === body.school_id); c.school_name = sc ? sc.name : null; c.school_color = sc ? sc.color : null; renderBoard(); }
 async function saveModal() {
   const b = M.body;
   b.type = $('#m-type').value; b.teacher_id = +$('#m-teacher').value || null; b.school_id = await schoolIdFor($('#m-school').value); b.title = $('#m-title').value.trim(); b.day = +$('#m-day').value; b.note = $('#m-note').value;
@@ -925,7 +940,7 @@ async function renderStats() {
   const durH = c => ((+c.end.slice(0, 2) * 60 + +c.end.slice(3)) - (+c.start.slice(0, 2) * 60 + +c.start.slice(3))) / 60;
   const active = students.filter(s => s.active), inactive = students.filter(s => !s.active);
   const stuClasses = s => classes.filter(c => c.student_ids.includes(s.id));
-  const tClasses = t => classes.filter(c => c.teacher_id === t.id);
+  const tClasses = t => classes.filter(c => c.teacher_id === t.id || (c.assistant_ids || []).includes(t.id));
   const withCls = active.filter(s => stuClasses(s).length), noCls = active.filter(s => !stuClasses(s).length);
   const tWith = teachers.filter(t => tClasses(t).length), tNo = teachers.filter(t => !tClasses(t).length);
   const byType = Object.keys(TYPES).map(k => [TYPES[k], classes.filter(c => c.type === k).length]);

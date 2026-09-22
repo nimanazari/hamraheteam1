@@ -43,6 +43,7 @@ addCol('teachers', 'tg_chat_id', 'TEXT');
 addCol('teachers', 'tg_code', 'TEXT');
 addCol('teachers', 'perms', 'TEXT');
 addCol('classes', 'color', 'TEXT');
+addCol('classes', 'assistants', "TEXT DEFAULT ''"); // extra teachers: the class shows up in their own panel as a normal class
 addCol('students', 'phone', "TEXT DEFAULT ''");
 addCol('students', 'meeting_date', "TEXT DEFAULT ''");
 addCol('students', 'contact_note', "TEXT DEFAULT ''");
@@ -144,17 +145,22 @@ const overlap = (a, b) => toMin(a.start) < toMin(b.end) && toMin(b.start) < toMi
 function classWithStudents(c) {
   c.students = db.prepare('SELECT s.* FROM class_students cs JOIN students s ON s.id=cs.student_id WHERE cs.class_id=? ORDER BY s.name').all(c.id);
   c.student_ids = c.students.map(s => s.id);
+  try { c.assistant_ids = JSON.parse(c.assistants || '[]'); } catch { c.assistant_ids = []; }
+  if (!Array.isArray(c.assistant_ids)) c.assistant_ids = [];
+  c.assistant_names = c.assistant_ids.map(id => (db.prepare('SELECT name FROM teachers WHERE id=?').get(id) || {}).name).filter(Boolean);
   return c;
 }
+const teachersOf = c => [c.teacher_id, ...(c.assistant_ids || [])].filter(Boolean);
 function allClasses(where = '', params = []) {
   return db.prepare(`SELECT c.*, t.name teacher_name, t.color teacher_color, sc.name school_name, sc.color school_color FROM classes c LEFT JOIN teachers t ON t.id=c.teacher_id LEFT JOIN schools sc ON sc.id=c.school_id ${where} ORDER BY c.day, c.start`).all(...params).map(classWithStudents);
 }
-function findConflicts({ id, teacher_id, day, start, end, student_ids = [] }) {
+function findConflicts({ id, teacher_id, day, start, end, student_ids = [], assistant_ids = [] }) {
   const others = allClasses('WHERE c.day=? AND c.id<>?', [Number(day), Number(id) || 0]).filter(o => overlap({ start, end }, o));
+  const mine = [Number(teacher_id), ...(assistant_ids || []).map(Number)].filter(Boolean);
   const conflicts = [];
   for (const o of others) {
     const label = `${o.title || o.school_name || 'کلاس'} (${o.start}-${o.end})`;
-    if (teacher_id && o.teacher_id === Number(teacher_id)) conflicts.push({ type: 'teacher', name: o.teacher_name, class_id: o.id, class: label });
+    for (const t of teachersOf(o)) if (mine.includes(t)) conflicts.push({ type: 'teacher', name: (db.prepare('SELECT name FROM teachers WHERE id=?').get(t) || {}).name, class_id: o.id, class: label });
     for (const s of o.students) if (student_ids.map(Number).includes(s.id)) conflicts.push({ type: 'student', name: s.name, class_id: o.id, class: label });
   }
   return conflicts;
@@ -173,7 +179,7 @@ function restoreData(json) {
   db.exec('BEGIN');
   try {
     db.exec('DELETE FROM class_students; DELETE FROM overrides; DELETE FROM classes;');
-    const cols = ['id', 'title', 'teacher_id', 'school_id', 'day', 'start', 'end', 'note', 'type', 'color'];
+    const cols = ['id', 'title', 'teacher_id', 'school_id', 'day', 'start', 'end', 'note', 'type', 'color', 'assistants'];
     const ic = db.prepare(`INSERT INTO classes(${cols.join(',')}) VALUES (${cols.map(() => '?').join(',')})`);
     d.classes.forEach(c => ic.run(...cols.map(k => c[k] ?? (k === 'type' ? 'robotic' : k === 'note' || k === 'title' ? '' : null))));
     const ics = db.prepare('INSERT OR IGNORE INTO class_students VALUES (?,?)'); d.class_students.forEach(x => ics.run(x.class_id, x.student_id));
@@ -212,7 +218,7 @@ app.post('/api/classes/bulk', requirePerm('board'), (req, res) => {
   snapshot(req, 'auto', `${action === 'move' ? 'انتقال' : action === 'copy' ? 'کپی' : 'حذف'} ${list.length} کلاس ${action === 'clear' ? '' : 'به ' + DAYS[to_day]}`);
   const ins = db.prepare('INSERT OR IGNORE INTO class_students VALUES (?,?)');
   if (action === 'move') list.forEach(c => db.prepare('UPDATE classes SET day=? WHERE id=?').run(Number(to_day), c.id));
-  else if (action === 'copy') list.forEach(c => { const id = Number(db.prepare('INSERT INTO classes(title,teacher_id,school_id,day,start,end,note,type,color) VALUES (?,?,?,?,?,?,?,?,?)').run(c.title, c.teacher_id, c.school_id, Number(to_day), c.start, c.end, c.note, c.type, c.color || null).lastInsertRowid); c.student_ids.forEach(s => ins.run(id, s)); });
+  else if (action === 'copy') list.forEach(c => { const id = Number(db.prepare('INSERT INTO classes(title,teacher_id,school_id,day,start,end,note,type,color,assistants) VALUES (?,?,?,?,?,?,?,?,?,?)').run(c.title, c.teacher_id, c.school_id, Number(to_day), c.start, c.end, c.note, c.type, c.color || null, JSON.stringify(c.assistant_ids || [])).lastInsertRowid); c.student_ids.forEach(s => ins.run(id, s)); });
   else if (action === 'clear') list.forEach(c => { for (const t of ['overrides', 'class_students']) db.prepare(`DELETE FROM ${t} WHERE class_id=?`).run(c.id); db.prepare('DELETE FROM classes WHERE id=?').run(c.id); });
   res.json({ ok: true, count: list.length });
 });
@@ -269,7 +275,7 @@ function crud(table, cols, opts = {}) {
   app.delete(`/api/${table}/:id`, perm, (req, res) => { db.prepare(`DELETE FROM ${table} WHERE id=?`).run(req.params.id); if (opts.onDelete) opts.onDelete(req.params.id); res.json({ ok: true }); });
 }
 crud('schools', ['name', 'color'], { onDelete: id => { db.prepare('UPDATE students SET school_id=NULL WHERE school_id=?').run(id); db.prepare('UPDATE classes SET school_id=NULL WHERE school_id=?').run(id); } });
-crud('teachers', ['name', 'subject', 'username', 'password', 'color', 'is_admin', 'rate_hour', 'rate_session', 'rate_fixed', 'perms'], { onDelete: id => { db.prepare('UPDATE classes SET teacher_id=NULL WHERE teacher_id=?').run(id); db.prepare('DELETE FROM teacher_students WHERE teacher_id=?').run(id); } });
+crud('teachers', ['name', 'subject', 'username', 'password', 'color', 'is_admin', 'rate_hour', 'rate_session', 'rate_fixed', 'perms'], { onDelete: id => { db.prepare('UPDATE classes SET teacher_id=NULL WHERE teacher_id=?').run(id); for (const c of db.prepare('SELECT id, assistants FROM classes').all()) { try { const a = JSON.parse(c.assistants || '[]').filter(x => x !== Number(id)); db.prepare('UPDATE classes SET assistants=? WHERE id=?').run(JSON.stringify(a), c.id); } catch {} } db.prepare('DELETE FROM teacher_students WHERE teacher_id=?').run(id); } });
 crud('students', ['name', 'school_id', 'note', 'active', 'phone', 'meeting_date', 'contact_note', 'avail'], { onDelete: id => { db.prepare('DELETE FROM class_students WHERE student_id=?').run(id); db.prepare('DELETE FROM teacher_students WHERE student_id=?').run(id); } });
 app.put('/api/teachers/:id/students', requirePerm('board'), (req, res) => {
   db.prepare('DELETE FROM teacher_students WHERE teacher_id=?').run(req.params.id);
@@ -281,15 +287,16 @@ app.put('/api/teachers/:id/students', requirePerm('board'), (req, res) => {
 // ---- classes ----
 app.get('/api/classes/version', requireAuth, (req, res) => res.json({ v: db.prepare('SELECT COALESCE(MAX(id),0) m FROM snapshots').get().m + ':' + db.prepare('SELECT COUNT(*) c, COALESCE(SUM(id),0) s FROM classes').get().c + ':' + db.prepare('SELECT COUNT(*) c FROM class_students').get().c }));
 app.get('/api/classes', requireAuth, (req, res) => {
-  if (!isAdmin(req)) return res.json(allClasses('WHERE c.teacher_id=?', [req.user.id]));
+  if (!isAdmin(req)) return res.json(allClasses().filter(c => teachersOf(c).includes(req.user.id)));
   res.json(allClasses());
 });
 app.post('/api/classes/check', requirePerm('board'), (req, res) => res.json(findConflicts(req.body)));
 function saveClass(body, id) {
   const { title = '', teacher_id = null, school_id = null, day, start, end, note = '', type = 'robotic', color = null } = body;
+  const assistants = JSON.stringify((body.assistant_ids || []).map(Number).filter(x => x && x !== Number(teacher_id)));
   const student_ids = type === 'public' ? [] : (body.student_ids || []);
-  if (id) db.prepare('UPDATE classes SET title=?,teacher_id=?,school_id=?,day=?,start=?,end=?,note=?,type=?,color=? WHERE id=?').run(title, teacher_id, school_id, day, start, end, note, type, color || null, id);
-  else id = Number(db.prepare('INSERT INTO classes(title,teacher_id,school_id,day,start,end,note,type,color) VALUES (?,?,?,?,?,?,?,?,?)').run(title, teacher_id, school_id, day, start, end, note, type, color || null).lastInsertRowid);
+  if (id) db.prepare('UPDATE classes SET title=?,teacher_id=?,school_id=?,day=?,start=?,end=?,note=?,type=?,color=?,assistants=? WHERE id=?').run(title, teacher_id, school_id, day, start, end, note, type, color || null, assistants, id);
+  else id = Number(db.prepare('INSERT INTO classes(title,teacher_id,school_id,day,start,end,note,type,color,assistants) VALUES (?,?,?,?,?,?,?,?,?,?)').run(title, teacher_id, school_id, day, start, end, note, type, color || null, assistants).lastInsertRowid);
   db.prepare('DELETE FROM class_students WHERE class_id=?').run(id);
   const ins = db.prepare('INSERT OR IGNORE INTO class_students VALUES (?,?)');
   student_ids.forEach(s => ins.run(id, s));
