@@ -146,6 +146,8 @@
           <label><input type="checkbox" id="ui-tools" style="width:auto" onchange="saveUI()"> نوار ابزار (جستجو، فیلتر دبیر/مدرسه، برگرد/تکرار، نسخه‌ها، تمام‌صفحه)</label>
           <label><input type="checkbox" id="ui-stats" style="width:auto" onchange="saveUI()"> آمار بالای تخته</label>
           <p class="muted" style="font-size:12px;margin-top:8px">میان‌برها همیشه کار می‌کنند: Ctrl+Z برگرد · Ctrl+Y تکرار · Ctrl+C کپی کلاس باز · Ctrl+X بریدن · Ctrl+V چسباندن در روزی که موس رویش است · F تمام‌صفحه · L لیست</p></div>
+        <div class="card" id="classes-card" style="grid-column:1/-1"><h3>🗂 کلاس‌های روی تخته</h3>
+          <div style="overflow:auto"><table id="class-table"></table></div></div>
         <div class="card" id="colors-card" style="grid-column:1/-1"><h3>🎨 رنگ‌ها</h3>
           <p class="muted" style="font-size:12px">هر تغییر همان لحظه ذخیره می‌شود. رنگ کلاس (ستون سوم) بر رنگ دبیر و محل اولویت دارد؛ با ↺ به پیش‌فرض برمی‌گردد.</p>
           <div class="grid3" id="colors-body"></div></div>
@@ -207,7 +209,7 @@ async function loadAll() {
   ['#f-teacher', '#rep-teacher', '#c-teacher'].forEach(s => { const v = $(s).value; $(s).innerHTML = '<option value="">همه دبیران</option>' + tOpts; $(s).value = v; });
   ['#f-school', '#pool-school'].forEach(s => { const v = $(s).value; $(s).innerHTML = '<option value="">همه مدارس</option>' + sOpts; $(s).value = v; });
   if (ME && !ME.main) { $$('#v-settings .card').forEach(c => { if (/^رمز مدیر|تلگرام/.test(c.querySelector('h3')?.textContent || '')) c.style.display = 'none'; }); }
-  renderPerms(); renderColors();
+  renderPerms(); renderColors(); renderClassList();
   $('#set-slots').value = meta.slots.join('\n'); $('#set-term').value = meta.term_start; $('#set-cstart').value = meta.classes_start; $('#set-end').value = meta.term_end; $('#set-cmode').value = meta.color_mode || 'teacher'; $('#set-g0').value = meta.grid_start || '07:30'; $('#set-g1').value = meta.grid_end || '21:00'; ['#set-term', '#set-cstart', '#set-end', '#pay-from', '#pay-to', '#rep-from', '#rep-to'].forEach(id => { const el = $(id); if (el && !el._j) jalaliInput(el); else if (el) el._j.value = jStr(el.value); }); updateBadge();
   renderBoard(); renderPool(); renderTeachers(); renderStudents(); renderSchools(); refreshUndo();
   if ($('#v-calendar').classList.contains('active')) renderCal();
@@ -436,6 +438,7 @@ function bindDrops() {
     card.ondragend = () => card.classList.remove('dragging');
     card.onclick = e => { e.stopPropagation(); if (picked) { const p = picked; unpick(); return handleDrop(p, { cls: +card.dataset.cls }); } const was = card.classList.contains('open'); $$('.cls.open').forEach(x => x.classList.remove('open')); if (!was) card.classList.add('open'); };
     card.ondblclick = e => { e.stopPropagation(); openClass(+card.dataset.cls); };
+    card.oncontextmenu = e => { e.preventDefault(); e.stopPropagation(); showCtx(e, +card.dataset.cls); };
   });
 }
 
@@ -551,6 +554,20 @@ async function setTime(id, start, end) {
 async function setClassColor(id, color) { const c = classes.find(x => x.id === id); const body = bodyOf(c); body.color = color; await api('/api/classes/' + id, 'PUT', { ...body, force: true }); await reloadClasses(); renderColors(); }
 function togglePool(force) { const b = $('.board'); const open = force ?? !b.classList.contains('pool-open'); b.classList.toggle('pool-open', open); $('#pool-btn').classList.toggle('ghost', open); try { localStorage.setItem('poolOpen', open ? '1' : '0'); } catch {} }
 document.addEventListener('DOMContentLoaded', () => { try { togglePool(localStorage.getItem('poolOpen') === '1'); } catch { togglePool(false); } });
+function showCtx(e, id) {
+  $('#ctx')?.remove();
+  const c = classes.find(x => x.id === id); if (!c) return;
+  const m = document.createElement('div'); m.id = 'ctx'; m.className = 'ctx';
+  m.innerHTML = `<div class="ctx-h">${esc(c.teacher_name || 'بدون دبیر')} · ${meta.days[c.day]} ${fa(c.start)}–${fa(c.end)}</div>
+    <div class="ctx-i" onclick="openClass(${id})">✏️ ویرایش کامل</div>
+    <div class="ctx-i" onclick="CLIP=bodyOf(classes.find(x=>x.id===${id}));toast('کپی شد؛ روی روز مقصد Ctrl+V')">📋 کپی (Ctrl+C)</div>
+    <div class="ctx-i" onclick="const el=document.querySelector('.cls[data-cls='${id}']');el&&el.classList.add('open')">🔍 باز کردن جزئیات</div>
+    <div class="ctx-i danger" onclick="delClass(${id})">🗑 حذف کلاس</div>`;
+  document.body.appendChild(m);
+  const w = 220, x = Math.min(e.clientX, innerWidth - w - 8), y = Math.min(e.clientY, innerHeight - 180);
+  m.style.left = x + 'px'; m.style.top = y + 'px';
+  setTimeout(() => document.addEventListener('click', () => m.remove(), { once: true }), 0);
+}
 function startDragTime(e, id, mode) {
   e.preventDefault(); e.stopPropagation();
   const c = classes.find(x => x.id === id); const card = e.target.closest('.cls'); const colIn = card.closest('.col-in'); const r = colIn.getBoundingClientRect();
@@ -643,8 +660,9 @@ async function copyClass(id, day) {
   try { await api('/api/classes/bulk', 'POST', { action: 'copy', ids: [id], to_day: day }); closeModal(); toast('کپی شد به ' + meta.days[day], 'ok'); reloadClasses(); } catch (e) { toast(e.message, 'bad'); }
 }
 async function delClass(id) {
-  if (!confirm('این کلاس حذف شود؟')) return;
-  await api('/api/classes/' + id, 'DELETE'); closeModal(); toast('حذف شد'); reloadClasses();
+  const c = classes.find(x => x.id === id);
+  if (!confirm(`کلاس ${c ? (c.teacher_name || 'بدون دبیر') + ' · ' + meta.days[c.day] + ' ' + c.start : ''} حذف شود؟ (با ↶ یا Ctrl+Z قابل برگشت)`)) return;
+  await api('/api/classes/' + id, 'DELETE'); closeModal(); toast('حذف شد'); reloadClasses(); if ($('#v-settings').classList.contains('active')) renderClassList();
 }
 
 /* ================= STATS / EXPORT ================= */
@@ -955,6 +973,11 @@ document.addEventListener('keydown', async e => {
   else if ((e.ctrlKey || e.metaKey) && k === 'v' && CLIP) { e.preventDefault(); if (hoverDay == null) return toast('موس را روی روز مقصد ببرید و Ctrl+V بزنید', 'bad'); try { await saveWithConfirm({ ...CLIP, day: hoverDay }); toast('چسبانده شد در ' + meta.days[hoverDay], 'ok'); reloadClasses(); } catch (err) { if (err.message !== 'cancel') toast(err.message, 'bad'); } }
   else if (!e.ctrlKey && !e.metaKey && !e.altKey && $('#v-board').classList.contains('active')) { if (k === 'f') { e.preventDefault(); toggleFull(); } if (k === 'l') { e.preventDefault(); togglePool(); } }
 });
+function renderClassList() {
+  const t = $('#class-table'); if (!t) return;
+  const sorted = [...classes].sort((a, b) => a.day - b.day || a.start.localeCompare(b.start));
+  t.innerHTML = `<tr><th>روز</th><th>ساعت</th><th>دبیر</th><th>نوع</th><th>محل</th><th>نام</th><th>دانش‌آموز</th><th></th></tr>` + (sorted.map(c => `<tr><td>${meta.days[c.day]}</td><td>${fa(c.start)}–${fa(c.end)}</td><td><span class="dot" style="background:${cardColor(c)}"></span>${esc(c.teacher_name || '—')}</td><td>${TYPES[c.type] || ''}</td><td>${esc(c.school_name || '—')}</td><td>${esc(c.title || '')}</td><td>${c.type === 'public' ? '—' : fa(c.students.length)}</td><td><button class="btn ghost sm" onclick="openClass(${c.id})">ویرایش</button> <button class="btn danger sm" onclick="delClass(${c.id})">حذف</button></td></tr>`).join('') || '<tr><td colspan="8" class="muted">کلاسی نیست</td></tr>');
+}
 function renderColors() {
   const box = $('#colors-body'); if (!box) return;
   const row = (label, color, onch, extra = '') => `<div class="crow"><input type="color" value="${color}" onchange="${onch}"><span>${label}</span>${extra}</div>`;
