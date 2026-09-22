@@ -320,8 +320,8 @@ function renderPool() {
   $('#pool').innerHTML = html;
   bindTeacherDrops();
   $$('.item', $('#pool')).forEach(el => {
-    el.ondragstart = e => { e.dataTransfer.setData('text/plain', JSON.stringify({ type: el.dataset.type, id: +el.dataset.id })); el.classList.add('dragging'); if (el.dataset.type === 'student') showAvail(+el.dataset.id); };
-    el.ondragend = () => { el.classList.remove('dragging'); clearAvail(); };
+    el.ondragstart = e => { e.dataTransfer.setData('text/plain', JSON.stringify({ type: el.dataset.type, id: +el.dataset.id })); el.classList.add('dragging'); document.body.classList.add('dropping'); if (el.dataset.type === 'student') showAvail(+el.dataset.id); };
+    el.ondragend = () => { el.classList.remove('dragging'); document.body.classList.remove('dropping'); clearAvail(); };
     el.onclick = () => pick({ type: el.dataset.type, id: +el.dataset.id, name: el.firstChild.textContent });
     if (el.dataset.type === 'student') { el.onmouseenter = () => showAvail(+el.dataset.id); el.onmouseleave = clearAvail; }
     if (el.dataset.type === 'teacher') el.ondblclick = e => { e.stopPropagation(); unpick(); openTeacher(+el.dataset.id); };
@@ -343,8 +343,8 @@ function unpick() { picked = null; $('#pick-bar').classList.remove('show'); }
 function bindChips(root) {
   $$('.chip-in', root).forEach(ch => {
     const item = () => ({ type: ch.dataset.type, id: +ch.dataset.id, from: +ch.dataset.from || undefined, roster: +ch.dataset.roster || undefined });
-    ch.ondragstart = e => { e.stopPropagation(); e.dataTransfer.setData('text/plain', JSON.stringify(item())); ch.classList.add('dragging'); document.body.classList.add('dragging-in'); };
-    ch.ondragend = () => { ch.classList.remove('dragging'); document.body.classList.remove('dragging-in'); };
+    ch.ondragstart = e => { e.stopPropagation(); e.dataTransfer.setData('text/plain', JSON.stringify(item())); ch.classList.add('dragging'); document.body.classList.add('dragging-in', 'dropping'); };
+    ch.ondragend = () => { ch.classList.remove('dragging'); document.body.classList.remove('dragging-in', 'dropping'); };
     ch.onclick = e => { e.stopPropagation(); pick({ ...item(), name: ch.textContent.replace('👤 ', '') }); };
     if (ch.dataset.type === 'teacher') ch.ondblclick = e => { e.stopPropagation(); unpick(); openTeacher(+ch.dataset.id); };
   });
@@ -482,7 +482,22 @@ function bindDrops() {
   $$('.drop-day').forEach(col => {
     col.ondragover = e => { e.preventDefault(); col.classList.add('over'); };
     col.ondragleave = () => col.classList.remove('over');
-    col.ondrop = e => { if (!e._forwarded) { e.preventDefault(); e.stopPropagation(); } col.classList.remove('over'); const inner = col.querySelector('.col-in'); const r = inner.getBoundingClientRect(); const M = t => +t.slice(0, 2) * 60 + +t.slice(3); const g0 = M(meta.grid_start || '07:30'), g1 = M(meta.grid_end || '21:00'); let mins = g0 + Math.max(0, Math.min(1, (e.clientY - r.top) / r.height)) * (g1 - g0); mins = Math.round(mins / 30) * 30; const at = `${String(Math.floor(mins / 60)).padStart(2, '0')}:${String(mins % 60).padStart(2, '0')}`; handleDrop(JSON.parse(e.dataTransfer.getData('text/plain')), { day: +col.dataset.day, at }); };
+    col.ondrop = e => {
+      if (!e._forwarded) { e.preventDefault(); e.stopPropagation(); }
+      col.classList.remove('over'); document.body.classList.remove('dropping'); clearAvail();
+      const inner = col.querySelector('.col-in'), r = inner.getBoundingClientRect();
+      const g0 = MIN(meta.grid_start || '07:30'), g1 = MIN(meta.grid_end || '21:00');
+      const exact = g0 + Math.max(0, Math.min(1, (e.clientY - r.top) / r.height)) * (g1 - g0);
+      const at = HM(Math.round(exact / 30) * 30);
+      const day = +col.dataset.day, item = JSON.parse(e.dataTransfer.getData('text/plain'));
+      // dropped inside an existing class? put the person in that class instead of making a new one
+      if (item.type === 'student' || item.type === 'teacher') {
+        const hits = classes.filter(c => c.day === day && MIN(c.start) <= exact && exact < MIN(c.end));
+        if (hits.length === 1) return handleDrop(item, { cls: hits[0].id });
+        if (hits.length > 1) return pickClass(hits, item);
+      }
+      handleDrop(item, { day, at });
+    };
     col.onclick = e => { if (picked && !e.target.closest('.cls')) { const p = picked; unpick(); handleDrop(p, { day: +col.dataset.day }); } };
   });
   $$('.drop-cls').forEach(card => {
@@ -503,8 +518,15 @@ async function removeFrom(item) {
   await api('/api/classes/' + c.id, 'PUT', { ...body, force: true });
 }
 async function setRoster(tid, ids) { await api(`/api/teachers/${tid}/students`, 'PUT', { student_ids: ids }); teachers = await api('/api/teachers'); renderPool(); }
+function pickClass(list, item) {
+  openModal(`<div class="mbody" style="padding:22px"><h2>کدام کلاس؟</h2><p class="muted" style="font-size:12px">در این ساعت چند کلاس همزمان هست. یکی را انتخاب کنید.</p>
+    ${list.map(c => `<div class="pickc" style="border-right:6px solid ${cardColor(c)}" onclick="closeModal();handleDrop(${JSON.stringify(item).replace(/"/g, '&quot;')}, {cls:${c.id}})">
+      <b>${esc(c.teacher_name || 'بدون دبیر')}</b> · ${fa(c.start)}–${fa(c.end)}${c.school_name ? ' · 📍' + esc(c.school_name) : ''}${c.title ? ' · ' + esc(c.title) : ''}
+      <span class="muted">${c.type === 'public' ? 'عمومی' : fa(c.students.length) + ' دانش‌آموز'}</span></div>`).join('')}
+    <div class="row" style="justify-content:flex-end;margin-top:12px"><button class="btn ghost" onclick="closeModal()">انصراف</button></div></div>`);
+}
 async function handleDrop(item, target) {
-  clearAvail();
+  clearAvail(); document.body.classList.remove('dropping');
   try {
     if (target.teacher) {
       if (item.type !== 'student') return;

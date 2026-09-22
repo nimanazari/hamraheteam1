@@ -562,3 +562,12 @@ body.grabbing,body.grabbing *{cursor:grabbing!important}
 .av-hl{position:absolute;right:2px;left:2px;border-radius:9px;background:repeating-linear-gradient(45deg,rgba(34,197,94,.28),rgba(34,197,94,.28) 8px,rgba(34,197,94,.14) 8px,rgba(34,197,94,.14) 16px);border:2px dashed #22c55e;z-index:5;pointer-events:none;display:flex;align-items:center;justify-content:center;animation:pop .15s ease}
 .av-hl span{font-size:10.5px;font-weight:800;color:#166534;background:rgba(255,255,255,.85);border-radius:7px;padding:2px 6px;text-align:center;line-height:1.35}
 :root[data-theme=dark] .av-hl span{color:#dcfce7;background:rgba(0,0,0,.45)}
+
+/* make cards easy drop targets while dragging a person */
+body.dropping .board .cls{min-width:70px;z-index:10;transition:.12s}
+body.dropping .board .cls.over{outline:4px solid #fff;box-shadow:0 0 0 4px var(--accent),0 12px 28px rgba(0,0,0,.35);z-index:35;filter:brightness(1.12);min-width:150px}
+body.dropping .board .cls::after{content:'';position:absolute;inset:-4px;border-radius:12px}
+body.dropping .drop-day.over .col-in{background:var(--accent-soft)}
+.pickc{padding:10px 12px;border:1px solid var(--line);border-radius:12px;margin-bottom:8px;cursor:pointer;font-size:13px;display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+.pickc:hover{background:var(--soft);transform:translateX(-2px)}
+.pickc .muted{margin-right:auto;font-size:11.5px}
