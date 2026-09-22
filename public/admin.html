@@ -155,7 +155,7 @@
           <label><input type="checkbox" id="ui-stats" style="width:auto" onchange="saveUI()"> آمار بالای تخته</label>
           <p class="muted" style="font-size:12px;margin-top:8px">میان‌برها همیشه کار می‌کنند: Ctrl+Z برگرد · Ctrl+Y تکرار · Ctrl+C کپی کلاس باز · Ctrl+X بریدن · Ctrl+V چسباندن در روزی که موس رویش است · F تمام‌صفحه · L لیست</p></div>
         <div class="card" id="phones-card" style="grid-column:1/-1"><h3>📞 شماره‌ها و روز جلسه</h3>
-          <div class="row" style="margin-bottom:8px"><input id="ph-q" placeholder="جستجوی نام یا شماره..." style="width:240px" oninput="renderPhones()"><label><input type="checkbox" id="ph-only" style="width:auto" onchange="renderPhones()"> فقط بدون روز جلسه</label><button class="btn ghost sm" onclick="exportPhones()">⬇️ اکسل</button></div>
+          <div class="row" style="margin-bottom:8px"><input id="ph-q" placeholder="جستجوی نام یا شماره..." style="width:240px" oninput="renderPhones()"><label><input type="checkbox" id="ph-only" style="width:auto" onchange="renderPhones()"> فقط کسانی که هنوز روز پیشنهادی ندارند</label><button class="btn ghost sm" onclick="exportPhones()">⬇️ اکسل</button></div>
           <p class="muted" style="font-size:12px">هر تغییر همان لحظه ذخیره می‌شود. روز جلسه را با کلیک روی تقویم انتخاب کنید.</p>
           <div style="overflow:auto;max-height:70vh"><table id="ph-table"></table></div></div>
         <div class="card" id="classes-card" style="grid-column:1/-1"><h3>🗂 کلاس‌های روی تخته</h3>
@@ -312,15 +312,17 @@ function renderPool() {
   } else {
     html = students.filter(s => (!q || s.name.includes(q)) && (!sch || s.school_id === sch)).map(s => {
       const n = classes.filter(c => c.student_ids.includes(s.id)).length;
-      return `<div class="stu item ${s.active ? '' : 'inactive'}" draggable="true" data-type="student" data-id="${s.id}" title="${esc(s.note)}"><span>${esc(s.name)}</span><span class="sch">${n ? fa(n) + ' کلاس' : ''}</span></div>`;
+      const av = availShort(s);
+      return `<div class="stu item ${s.active ? '' : 'inactive'} ${av ? 'has-av' : ''}" draggable="true" data-type="student" data-id="${s.id}" title="${esc(s.note)}${av ? ' — پیشنهاد خانواده: ' + av : ''}"><span>${esc(s.name)}${av ? `<em class="avtag">${esc(av)}</em>` : ''}</span><span class="sch">${n ? fa(n) + ' کلاس' : ''}</span></div>`;
     }).join('');
   }
   $('#pool').innerHTML = html;
   bindTeacherDrops();
   $$('.item', $('#pool')).forEach(el => {
-    el.ondragstart = e => { e.dataTransfer.setData('text/plain', JSON.stringify({ type: el.dataset.type, id: +el.dataset.id })); el.classList.add('dragging'); };
-    el.ondragend = () => el.classList.remove('dragging');
+    el.ondragstart = e => { e.dataTransfer.setData('text/plain', JSON.stringify({ type: el.dataset.type, id: +el.dataset.id })); el.classList.add('dragging'); if (el.dataset.type === 'student') showAvail(+el.dataset.id); };
+    el.ondragend = () => { el.classList.remove('dragging'); clearAvail(); };
     el.onclick = () => pick({ type: el.dataset.type, id: +el.dataset.id, name: el.firstChild.textContent });
+    if (el.dataset.type === 'student') { el.onmouseenter = () => showAvail(+el.dataset.id); el.onmouseleave = clearAvail; }
     if (el.dataset.type === 'teacher') el.ondblclick = e => { e.stopPropagation(); unpick(); openTeacher(+el.dataset.id); };
   });
 }
@@ -403,6 +405,23 @@ setInterval(async () => {
   if (!ME || !$('#v-board').classList.contains('active') || dragging || undoBusy || $('#overlay').classList.contains('show') || document.querySelector('.inline-ed') || document.body.classList.contains('grabbing')) return;
   try { const { v } = await api('/api/classes/version'); if (lastVer && v !== lastVer) { [classes, schools, teachers] = await Promise.all([api('/api/classes'), api('/api/schools'), api('/api/teachers')]); renderBoard(); renderPool(); refreshUndo(); } lastVer = v; } catch {}
 }, 8000);
+function clearAvail() { $$('.av-hl').forEach(x => x.remove()); }
+function showAvail(sid) {
+  clearAvail();
+  const st = students.find(x => x.id === sid); if (!st) return;
+  const list = availOf(st); if (!list.length) return;
+  const g0 = MIN(meta.grid_start || '07:30'), g1 = MIN(meta.grid_end || '21:00'), span = g1 - g0;
+  for (const a of list) {
+    const col = $(`#tt .drop-day[data-day="${a.day}"]`); if (!col) continue;
+    const inner = col.querySelector('.col-in'); if (!inner) continue;
+    const s0 = Math.max(g0, MIN(a.start || meta.grid_start)), s1 = Math.min(g1, MIN(a.end || a.start || meta.grid_end));
+    const d = document.createElement('div'); d.className = 'av-hl';
+    d.style.top = ((s0 - g0) / span * 100).toFixed(2) + '%';
+    d.style.height = (Math.max(2, (s1 - s0)) / span * 100).toFixed(2) + '%';
+    d.innerHTML = `<span>✅ ${esc(st.name)}<br>${fa(a.start || '')}${a.end ? '–' + fa(a.end) : ''}</span>`;
+    inner.appendChild(d);
+  }
+}
 function bindTeacherDrops() {
   bindChips($('#pool'));
   $$('.drop-teacher').forEach(g => {
@@ -484,6 +503,7 @@ async function removeFrom(item) {
 }
 async function setRoster(tid, ids) { await api(`/api/teachers/${tid}/students`, 'PUT', { student_ids: ids }); teachers = await api('/api/teachers'); renderPool(); }
 async function handleDrop(item, target) {
+  clearAvail();
   try {
     if (target.teacher) {
       if (item.type !== 'student') return;
@@ -953,25 +973,25 @@ function renderStudents() {
   const q = $('#s-q').value.trim();
   const list = students.filter(s => !q || s.name.includes(q) || (s.phone || '').includes(q));
   renderDupBanner('#s-dups', students, 'students');
-  $('#s-table').innerHTML = `<tr><th>#</th><th>نام</th><th>شماره</th><th>روز جلسه</th><th>مدرسه</th><th>وضعیت</th><th>کلاس‌ها</th><th></th></tr>` + list.map((s, i) => `<tr style="${s.active ? '' : 'opacity:.5'}">
-    <td>${fa(i + 1)}</td><td><b>${esc(s.name)}</b>${s.contact_note ? `<div class="muted" style="font-size:11px">${esc(s.contact_note)}</div>` : ''}</td><td dir="ltr">${esc(s.phone || '—')}</td><td>${s.meeting_date ? jStr(s.meeting_date) : '<span class="muted">—</span>'}</td><td>${esc(schoolName(s.school_id)) || '<span class="muted">—</span>'}</td><td>${s.active ? '<span class="chip">فعال</span>' : `<span class="chip" style="background:#fee2e2">${esc(s.note || 'غیرفعال')}</span>`}</td>
+  $('#s-table').innerHTML = `<tr><th>#</th><th>نام</th><th>شماره</th><th>روز پیشنهادی</th><th>مدرسه</th><th>وضعیت</th><th>کلاس‌ها</th><th></th></tr>` + list.map((s, i) => `<tr style="${s.active ? '' : 'opacity:.5'}">
+    <td>${fa(i + 1)}</td><td><b>${esc(s.name)}</b>${s.contact_note ? `<div class="muted" style="font-size:11px">${esc(s.contact_note)}</div>` : ''}</td><td dir="ltr">${esc(s.phone || '—')}</td><td>${availShort(s) || '<span class="muted">—</span>'}</td><td>${esc(schoolName(s.school_id)) || '<span class="muted">—</span>'}</td><td>${s.active ? '<span class="chip">فعال</span>' : `<span class="chip" style="background:#fee2e2">${esc(s.note || 'غیرفعال')}</span>`}</td>
     <td>${classes.filter(c => c.student_ids.includes(s.id)).map(c => `<span class="chip" style="background:${c.teacher_color}22;border-color:${c.teacher_color}55">${meta.days[c.day]} ${fa(c.start)} ${esc(c.teacher_name || '')}</span>`).join(' ')}</td>
     <td><button class="btn ghost sm" onclick="editStudent(${s.id})">ویرایش</button> <button class="btn ghost sm" onclick="del('students',${s.id})">حذف</button></td></tr>`).join('');
 }
 $('#s-q').oninput = renderStudents;
 function editStudent(id) {
   const s = students.find(x => x.id === id) || { name: '', school_id: null, note: '', active: 1 };
-  setTimeout(() => { const d = $('#m-meet'); if (d && !d._j) jalaliInput(d); }, 0);
   openModal(`<h2>${id ? 'ویرایش' : 'افزودن'} دانش‌آموز</h2>
     <div class="field"><label>نام</label><input id="m-name" value="${esc(s.name)}" autofocus oninput="showSimilar('#m-sim', students, this.value, ${id || 0})"><div id="m-sim"></div></div>
     <div class="field"><label>مدرسه</label><select id="m-school"><option value="">—</option>${schools.map(x => `<option value="${x.id}" ${x.id === s.school_id ? 'selected' : ''}>${esc(x.name)}</option>`).join('')}</select></div>
-    <div class="grid3"><div class="field"><label>شماره تماس</label><input id="m-phone" dir="ltr" value="${esc(s.phone || '')}"></div><div class="field"><label>روز جلسه</label><input type="date" id="m-meet" value="${s.meeting_date || ''}"></div><div class="field"><label>توضیحات تماس</label><input id="m-cnote" value="${esc(s.contact_note || '')}"></div></div>
+    <div class="grid2"><div class="field"><label>شماره تماس</label><input id="m-phone" dir="ltr" value="${esc(s.phone || '')}"></div><div class="field"><label>توضیحات تماس</label><input id="m-cnote" value="${esc(s.contact_note || '')}"></div></div>
+    ${id ? `<div class="field"><label>روز و ساعت پیشنهادی خانواده</label>${availRows(s)}</div>` : ''}
     <div class="grid2"><div class="field"><label>وضعیت</label><select id="m-active"><option value="1" ${s.active ? 'selected' : ''}>فعال</option><option value="0" ${!s.active ? 'selected' : ''}>غیرفعال</option></select></div><div class="field"><label>توضیح</label><input id="m-note" value="${esc(s.note)}"></div></div>
     <div class="row" style="justify-content:flex-end"><button class="btn ghost" onclick="closeModal()">انصراف</button>${id ? '' : '<button class="btn ghost" onclick="saveStudent(0, true)">ذخیره و بعدی</button>'}<button class="btn" onclick="saveStudent(${id || 0})">ذخیره</button></div>`);
   setTimeout(() => $('#m-name')?.focus(), 30);
 }
 async function saveStudent(id, again) {
-  const body = { name: $('#m-name').value.trim(), school_id: +$('#m-school').value || null, note: $('#m-note').value, active: +$('#m-active').value, phone: $('#m-phone').value.trim(), meeting_date: $('#m-meet').value, contact_note: $('#m-cnote').value };
+  const body = { name: $('#m-name').value.trim(), school_id: +$('#m-school').value || null, note: $('#m-note').value, active: +$('#m-active').value, phone: $('#m-phone').value.trim(), contact_note: $('#m-cnote').value };
   if (!body.name) return toast('نام لازم است', 'bad');
   const sim = similarNames(students, body.name, id || 0);
   if (sim.length && sim[0].score === 3 && !confirm(`«${body.name}» قبلاً ثبت شده. با این حال اضافه شود؟`)) return;
@@ -1135,21 +1155,39 @@ document.addEventListener('keydown', async e => {
   else if (ctrl && code === 'KeyV' && CLIP) { e.preventDefault(); if (hoverDay == null) return toast('موس را روی روز مقصد ببرید و Ctrl+V بزنید', 'bad'); try { await saveWithConfirm({ ...CLIP, day: hoverDay }); toastUndo('چسبانده شد در ' + meta.days[hoverDay]); reloadClasses(); } catch (err) { if (err.message !== 'cancel') toast(err.message, 'bad'); } }
   else if (!ctrl && !e.altKey && $('#v-board').classList.contains('active')) { if (code === 'KeyF') { e.preventDefault(); toggleFull(); } if (code === 'KeyL') { e.preventDefault(); togglePool(); } }
 });
+const availOf = x => { try { const a = JSON.parse(x.avail || '[]'); return Array.isArray(a) ? a : []; } catch { return []; } };
+const availShort = x => availOf(x).map(a => `${meta.days[a.day].slice(0, 2)}${a.start ? ' ' + fa(a.start.slice(0, 5)) : ''}`).join('، ');
+async function setAvail(id, list) {
+  await api('/api/students/' + id, 'PUT', { avail: JSON.stringify(list) });
+  const x = students.find(s => s.id === id); if (x) x.avail = JSON.stringify(list);
+  renderPhones(); renderPool(); toast('ذخیره شد', 'ok');
+}
+function availRows(x) {
+  const a = availOf(x);
+  return `<div class="av">${a.map((r, i) => `<span class="av-i" title="${esc(r.note || '')}">
+      <select onchange="avEdit(${x.id},${i},'day',this.value)">${meta.days.map((d, di) => `<option value="${di}" ${di === +r.day ? 'selected' : ''}>${d}</option>`).join('')}</select>
+      <input type="time" value="${r.start || ''}" step="900" onchange="avEdit(${x.id},${i},'start',this.value)">
+      <b>تا</b><input type="time" value="${r.end || ''}" step="900" onchange="avEdit(${x.id},${i},'end',this.value)">
+      <i onclick="avDel(${x.id},${i})" title="حذف">✕</i></span>`).join('')}
+    <button class="btn ghost sm" onclick="avAdd(${x.id})">+ افزودن روز</button></div>`;
+}
+function avAdd(id) { const a = availOf(students.find(s => s.id === id)); a.push({ day: 5, start: '10:00', end: '12:00', note: '' }); setAvail(id, a); }
+function avDel(id, i) { const a = availOf(students.find(s => s.id === id)); a.splice(i, 1); setAvail(id, a); }
+function avEdit(id, i, key, val) { const a = availOf(students.find(s => s.id === id)); if (!a[i]) return; a[i][key] = key === 'day' ? +val : val; setAvail(id, a); }
 function renderPhones() {
   const t = $('#ph-table'); if (!t) return;
   const q = ($('#ph-q')?.value || '').trim(), only = $('#ph-only')?.checked;
-  const list = students.filter(x => (!q || x.name.includes(q) || (x.phone || '').includes(q)) && (!only || !x.meeting_date));
-  t.innerHTML = `<tr><th>#</th><th>نام</th><th>شماره تماس</th><th>روز جلسه</th><th>توضیحات</th><th>وضعیت</th></tr>` + list.map((x, i) => `<tr style="${x.active ? '' : 'opacity:.55'}">
-    <td>${fa(i + 1)}</td><td><b>${esc(x.name)}</b>${x.note ? `<div class="muted" style="font-size:11px">${esc(x.note)}</div>` : ''}</td>
-    <td><input dir="ltr" value="${esc(x.phone || '')}" placeholder="09..." style="width:140px" onchange="setStudent(${x.id},'phone',this.value)"></td>
-    <td><input type="date" class="ph-date" value="${x.meeting_date || ''}" data-id="${x.id}" style="width:130px"></td>
-    <td><input value="${esc(x.contact_note || '')}" placeholder="مثلاً: تماس گرفته شد، منتظر جواب" onchange="setStudent(${x.id},'contact_note',this.value)"></td>
-    <td>${x.active ? 'فعال' : 'غیرفعال'}</td></tr>`).join('');
-  $$('.ph-date', t).forEach(d => { const id = +d.dataset.id; jalaliInput(d); d.onchange = () => setStudent(id, 'meeting_date', d.value); });
+  const list = students.filter(x => (!q || x.name.includes(q) || (x.phone || '').includes(q)) && (!only || !availOf(x).length));
+  t.innerHTML = `<tr><th>#</th><th>نام</th><th>شماره تماس</th><th>روز و ساعت پیشنهادی خانواده</th><th>توضیحات تماس</th></tr>` + list.map((x, i) => `<tr style="${x.active ? '' : 'opacity:.55'}">
+    <td>${fa(i + 1)}</td><td><b>${esc(x.name)}</b>${x.note ? `<div class="muted" style="font-size:11px">${esc(x.note)}</div>` : ''}${x.active ? '' : '<div class="muted" style="font-size:11px">غیرفعال</div>'}</td>
+    <td><input dir="ltr" value="${esc(x.phone || '')}" placeholder="09..." style="width:135px" onchange="setStudent(${x.id},'phone',this.value)"></td>
+    <td>${availRows(x)}</td>
+    <td><input value="${esc(x.contact_note || '')}" placeholder="مثلاً: تماس گرفته شد، منتظر جواب" onchange="setStudent(${x.id},'contact_note',this.value)"></td></tr>`).join('');
+
 }
 async function setStudent(id, key, val) { await api('/api/students/' + id, 'PUT', { [key]: String(val || '').trim() }); const x = students.find(s => s.id === id); if (x) x[key] = String(val || '').trim(); toast('ذخیره شد', 'ok'); }
 function exportPhones() {
-  const rows = [['نام', 'شماره', 'روز جلسه', 'توضیحات', 'وضعیت'], ...students.map(x => [x.name, x.phone || '', x.meeting_date ? jStr(x.meeting_date) : '', x.contact_note || '', x.active ? 'فعال' : 'غیرفعال' + (x.note ? ' (' + x.note + ')' : '')])];
+  const rows = [['نام', 'شماره', 'روز و ساعت پیشنهادی', 'توضیحات', 'وضعیت'], ...students.map(x => [x.name, x.phone || '', availOf(x).map(a => `${meta.days[a.day]} ${a.start || ''}-${a.end || ''}`).join(' / '), x.contact_note || '', x.active ? 'فعال' : 'غیرفعال' + (x.note ? ' (' + x.note + ')' : '')])];
   const csv = '\ufeff' + rows.map(r => r.map(v => '"' + String(v ?? '').replace(/"/g, '""') + '"').join(',')).join('\r\n');
   const a = document.createElement('a'); a.href = URL.createObjectURL(new Blob([csv], { type: 'text/csv;charset=utf-8' })); a.download = 'phones.csv'; a.click();
 }

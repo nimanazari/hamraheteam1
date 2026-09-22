@@ -46,6 +46,7 @@ addCol('classes', 'color', 'TEXT');
 addCol('students', 'phone', "TEXT DEFAULT ''");
 addCol('students', 'meeting_date', "TEXT DEFAULT ''");
 addCol('students', 'contact_note', "TEXT DEFAULT ''");
+addCol('students', 'avail', "TEXT DEFAULT ''");  // [{day,start,end,note}] suggested by the family on the phone
 addCol('schools', 'color', 'TEXT');
 const PERMS = ['board', 'calendar', 'teachers', 'students', 'schools', 'reports', 'plans', 'payroll', 'settings'];
 const DEFAULT_PERMS = PERMS.filter(p => p !== 'payroll');
@@ -252,6 +253,7 @@ function crud(table, cols, opts = {}) {
   const perm = requirePerm(table);
   app.post(`/api/${table}`, perm, (req, res) => {
     if (table === 'teachers') { if (!req.user.main) { delete req.body.is_admin; delete req.body.perms; delete req.body.rate_hour; delete req.body.rate_session; delete req.body.rate_fixed; } if ('perms' in req.body && typeof req.body.perms !== 'string') req.body.perms = JSON.stringify(req.body.perms || []); }
+    for (const k of cols) if (typeof req.body[k] === 'object' && req.body[k] !== null) req.body[k] = JSON.stringify(req.body[k]);
     const vals = cols.map(c => { const v = req.body[c]; return (v === undefined || v === null) ? null : (typeof v === 'object' ? JSON.stringify(v) : v); });
     try { const r = db.prepare(`INSERT INTO ${table}(${cols.join(',')}) VALUES (${cols.map(() => '?').join(',')})`).run(...vals); res.json({ id: Number(r.lastInsertRowid) }); }
     catch (e) { res.status(400).json({ error: e.message }); }
@@ -260,7 +262,7 @@ function crud(table, cols, opts = {}) {
     let set = cols.filter(c => c in req.body);
     if (table === 'teachers' && !req.user.main) set = set.filter(c => !['is_admin', 'perms', 'rate_hour', 'rate_session', 'rate_fixed'].includes(c)); // only main admin grants access / sets rates
     if (table === 'teachers' && 'perms' in req.body && typeof req.body.perms !== 'string') req.body.perms = JSON.stringify(req.body.perms || []);
-    if (table === 'teachers') for (const k of set) if (typeof req.body[k] === 'object' && req.body[k] !== null) req.body[k] = JSON.stringify(req.body[k]);
+    for (const k of set) if (typeof req.body[k] === 'object' && req.body[k] !== null) req.body[k] = JSON.stringify(req.body[k]);
     try { if (set.length) db.prepare(`UPDATE ${table} SET ${set.map(c => `${c}=?`).join(',')} WHERE id=?`).run(...set.map(c => req.body[c]), req.params.id); res.json({ ok: true }); }
     catch (e) { res.status(400).json({ error: e.message }); }
   });
@@ -268,7 +270,7 @@ function crud(table, cols, opts = {}) {
 }
 crud('schools', ['name', 'color'], { onDelete: id => { db.prepare('UPDATE students SET school_id=NULL WHERE school_id=?').run(id); db.prepare('UPDATE classes SET school_id=NULL WHERE school_id=?').run(id); } });
 crud('teachers', ['name', 'subject', 'username', 'password', 'color', 'is_admin', 'rate_hour', 'rate_session', 'rate_fixed', 'perms'], { onDelete: id => { db.prepare('UPDATE classes SET teacher_id=NULL WHERE teacher_id=?').run(id); db.prepare('DELETE FROM teacher_students WHERE teacher_id=?').run(id); } });
-crud('students', ['name', 'school_id', 'note', 'active', 'phone', 'meeting_date', 'contact_note'], { onDelete: id => { db.prepare('DELETE FROM class_students WHERE student_id=?').run(id); db.prepare('DELETE FROM teacher_students WHERE student_id=?').run(id); } });
+crud('students', ['name', 'school_id', 'note', 'active', 'phone', 'meeting_date', 'contact_note', 'avail'], { onDelete: id => { db.prepare('DELETE FROM class_students WHERE student_id=?').run(id); db.prepare('DELETE FROM teacher_students WHERE student_id=?').run(id); } });
 app.put('/api/teachers/:id/students', requirePerm('board'), (req, res) => {
   db.prepare('DELETE FROM teacher_students WHERE teacher_id=?').run(req.params.id);
   const ins = db.prepare('INSERT OR IGNORE INTO teacher_students VALUES (?,?)');
