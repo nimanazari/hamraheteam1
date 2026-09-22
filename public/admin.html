@@ -32,7 +32,6 @@
     <section class="view active" id="v-board">
       <div class="topbar" id="board-tools">
         <div class="row">
-          <input id="f-q" placeholder="🔎 جستجو: دانش‌آموز، دبیر، محل" style="width:210px">
           <select id="f-teacher" style="width:150px"><option value="">همه دبیران</option></select>
           <select id="f-school" style="width:160px"><option value="">همه محل‌ها</option></select>
           <button class="btn ghost" id="btn-undo" onclick="undo()" title="برگرداندن آخرین تغییر (Ctrl+Z)">↶ برگرد</button>
@@ -41,7 +40,13 @@
           <button class="btn ghost" onclick="toggleFull()" title="تمام‌صفحه">⛶</button>
         </div>
       </div>
-      <div class="row" style="margin-bottom:8px"><button class="btn sm" id="pool-btn" onclick="togglePool()">📚 لیست دبیر/دانش‌آموز</button></div>
+      <div class="row" style="margin-bottom:8px">
+        <input id="f-q" list="q-list" placeholder="🔎 نام دبیر یا دانش‌آموز را بنویسید..." style="width:280px" autocomplete="off">
+        <datalist id="q-list"></datalist>
+        <button class="btn ghost sm" id="q-clear" style="display:none" onclick="$('#f-q').value='';renderBoard()">✕ پاک کردن</button>
+        <span class="grow"></span>
+        <button class="btn sm" id="pool-btn" onclick="togglePool()">📚 لیست دبیر/دانش‌آموز</button>
+      </div>
       <div id="board-stats"><div class="stats mini" id="stats"></div></div>
       <div id="filter-bar" class="filter-bar"></div>
       <div class="board">
@@ -218,6 +223,7 @@ async function loadAll() {
   if (ME && !ME.main) { $$('#v-settings .card').forEach(c => { if (/^رمز مدیر|تلگرام/.test(c.querySelector('h3')?.textContent || '')) c.style.display = 'none'; }); }
   renderPerms(); renderColors(); renderClassList(); renderPhones();
   $('#set-slots').value = meta.slots.join('\n'); $('#set-term').value = meta.term_start; $('#set-cstart').value = meta.classes_start; $('#set-end').value = meta.term_end; $('#set-cmode').value = meta.color_mode || 'teacher'; $('#set-g0').value = meta.grid_start || '07:30'; $('#set-g1').value = meta.grid_end || '21:00'; ['#set-term', '#set-cstart', '#set-end', '#pay-from', '#pay-to', '#rep-from', '#rep-to'].forEach(id => { const el = $(id); if (el && !el._j) jalaliInput(el); else if (el) el._j.value = jStr(el.value); }); updateBadge();
+  $('#q-list').innerHTML = [...teachers.map(t => t.name), ...students.map(s => s.name), ...schools.map(s => s.name)].map(n => `<option value="${esc(n)}">`).join('');
   renderBoard(); renderPool(); renderTeachers(); renderStudents(); renderSchools(); refreshUndo();
   if ($('#v-calendar').classList.contains('active')) renderCal();
 }
@@ -227,10 +233,31 @@ const teacherById = id => teachers.find(t => t.id === id);
 const clsLabel = c => c.teacher_name ? c.teacher_name + (c.title ? ' · ' + c.title : c.school_name ? ' · ' + c.school_name : '') : (c.title || c.school_name || 'کلاس');
 
 /* ================= BOARD ================= */
+const durH = c => ((+c.end.slice(0, 2) * 60 + +c.end.slice(3)) - (+c.start.slice(0, 2) * 60 + +c.start.slice(3))) / 60;
+function whoLine(icon, name, cs, extra = '') {
+  const h = cs.reduce((a, c) => a + durH(c), 0);
+  return `<div class="sr"><div class="sr-h">${icon} <b>${esc(name)}</b> ${extra}${cs.length ? ` — ${fa(cs.length)} کلاس · ${fa(h.toFixed(1))} ساعت در هفته · ${[...new Set(cs.map(c => meta.days[c.day]))].join('، ')}` : ' — <span style="color:var(--bad)">هیچ کلاسی ندارد</span>'}</div>
+    ${cs.length ? `<div class="sr-c">${cs.map(c => `<span class="chip" style="border-color:${cardColor(c)}"><b>${meta.days[c.day]}</b> ${fa(c.start)}–${fa(c.end)}${c.school_name ? ' · 📍' + esc(c.school_name) : ''}${c.teacher_name ? ' · 👤' + esc(c.teacher_name) : ''}</span>`).join('')}</div>` : ''}</div>`;
+}
+function searchSummary(fq, ft, fs) {
+  const byDay = (a, b) => a.day - b.day || a.start.localeCompare(b.start);
+  let html = '';
+  if (fq) {
+    const ts = teachers.filter(x => x.name.includes(fq)), ss = students.filter(x => x.name.includes(fq)), sc = schools.filter(x => x.name.includes(fq));
+    ts.slice(0, 4).forEach(x => html += whoLine('👩‍🏫', x.name, classes.filter(c => c.teacher_id === x.id).sort(byDay), x.subject ? `<span class="muted">${esc(x.subject)}</span>` : ''));
+    ss.slice(0, 6).forEach(x => html += whoLine('🎒', x.name, classes.filter(c => c.student_ids.includes(x.id)).sort(byDay), x.active ? '' : '<span class="muted">(غیرفعال)</span>'));
+    sc.slice(0, 3).forEach(x => html += whoLine('🏫', x.name, classes.filter(c => c.school_id === x.id).sort(byDay)));
+    if (!ts.length && !ss.length && !sc.length) html = `<div class="sr"><div class="sr-h">نتیجه‌ای برای «${esc(fq)}» پیدا نشد.</div></div>`;
+  }
+  if (ft) html += whoLine('👩‍🏫', teacherById(ft)?.name || '', classes.filter(c => c.teacher_id === ft).sort(byDay));
+  if (fs) html += whoLine('🏫', schoolName(fs), classes.filter(c => c.school_id === fs).sort(byDay));
+  return html + `<div style="width:100%"><button class="btn ghost sm" onclick="$('#f-teacher').value='';$('#f-school').value='';$('#f-q').value='';renderBoard()">✕ نمایش همه کلاس‌ها</button></div>`;
+}
 function renderBoard() {
   const ft = +$('#f-teacher').value, fs = +$('#f-school').value, td = todayDayIndex(), fq = $('#f-q').value.trim();
   const matchQ = c => !fq || (c.teacher_name || '').includes(fq) || (c.school_name || '').includes(fq) || (c.title || '').includes(fq) || c.students.some(s => s.name.includes(fq));
-  $('#filter-bar').innerHTML = (ft || fs || fq) ? `🔎 فقط ${fq ? 'موارد شامل «<b>' + esc(fq) + '</b>»' : ''} ${ft ? 'دبیر <b>' + esc(teacherById(ft)?.name || '') + '</b>' : ''} ${fs ? 'محل <b>' + esc(schoolName(fs)) + '</b>' : ''} نمایش داده می‌شود <button class="btn ghost sm" onclick="$('#f-teacher').value='';$('#f-school').value='';$('#f-q').value='';renderBoard()">✕ نمایش همه</button>` : '';
+  $('#q-clear').style.display = fq ? '' : 'none';
+  $('#filter-bar').innerHTML = (ft || fs || fq) ? searchSummary(fq, ft, fs) : '';
   $('#stats').innerHTML = [['📚', classes.length, 'کلاس در هفته'], ['👩‍🏫', teachers.length, 'دبیر'], ['🎒', students.filter(s => s.active).length, 'دانش‌آموز فعال'], ['🏫', schools.length, 'مدرسه']].map(([i, n, l]) => `<div class="stat"><i>${i}</i><div><b>${fa(n)}</b><span>${l}</span></div></div>`).join('');
   const M = t => +t.slice(0, 2) * 60 + +t.slice(3);
   const g0 = M(meta.grid_start || '07:30'), g1 = M(meta.grid_end || '21:00'), span = Math.max(60, g1 - g0);
