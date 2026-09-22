@@ -1138,7 +1138,7 @@ function editStudent(id) {
   openModal(`<h2>${id ? 'ویرایش' : 'افزودن'} دانش‌آموز</h2>
     <div class="field"><label>نام</label><input id="m-name" value="${esc(s.name)}" autofocus oninput="showSimilar('#m-sim', students, this.value, ${id || 0})"><div id="m-sim"></div></div>
     <div class="field"><label>مدرسه</label><select id="m-school"><option value="">—</option>${schools.map(x => `<option value="${x.id}" ${x.id === s.school_id ? 'selected' : ''}>${esc(x.name)}</option>`).join('')}</select></div>
-    <div class="grid3"><div class="field"><label>شماره تماس</label><input id="m-phone" dir="ltr" value="${esc(s.phone || '')}"></div><div class="field"><label>تخفیف ٪</label><input type="number" id="m-disc" min="0" max="100" value="${s.discount || 0}"></div><div class="field"><label>توضیحات تماس</label><input id="m-cnote" value="${esc(s.contact_note || '')}"></div></div>
+    <div class="grid3"><div class="field"><label>شماره تماس</label><input id="m-phone" dir="ltr" value="${esc(s.phone || '')}"></div><div class="field"><label>تخفیف ٪ (۰ = ندارد)</label><input type="number" id="m-disc" min="0" max="100" value="${s.discount || 0}"></div><div class="field"><label>توضیحات تماس</label><input id="m-cnote" value="${esc(s.contact_note || '')}"></div></div>
     ${id ? `<div class="field"><label>روز و ساعت پیشنهادی خانواده</label>${availRows(s)}</div>` : ''}
     <div class="grid2"><div class="field"><label>وضعیت</label><select id="m-active"><option value="1" ${s.active ? 'selected' : ''}>فعال</option><option value="0" ${!s.active ? 'selected' : ''}>غیرفعال</option></select></div><div class="field"><label>توضیح</label><input id="m-note" value="${esc(s.note)}"></div></div>
     <div class="row" style="justify-content:flex-end"><button class="btn ghost" onclick="closeModal()">انصراف</button>${id ? '' : '<button class="btn ghost" onclick="saveStudent(0, true)">ذخیره و بعدی</button>'}<button class="btn" onclick="saveStudent(${id || 0})">ذخیره</button></div>`);
@@ -1333,12 +1333,11 @@ function renderPhones() {
   const q = ($('#ph-q')?.value || '').trim(), only = $('#ph-only')?.checked;
   const off = $('#ph-off')?.checked;
   const list = students.filter(x => (!q || x.name.includes(q) || (x.phone || '').includes(q)) && (!only || !availOf(x).length) && (!off || x.discount > 0));
-  t.innerHTML = `<tr><th>#</th><th>نام</th><th>شماره تماس</th><th>روز و ساعت پیشنهادی خانواده</th><th>توضیحات تماس</th><th>تخفیف ٪</th></tr>` + list.map((x, i) => `<tr style="${x.active ? '' : 'opacity:.55'}">
+  t.innerHTML = `<tr><th>#</th><th>نام</th><th>شماره تماس</th><th>روز و ساعت پیشنهادی خانواده</th><th>توضیحات تماس</th></tr>` + list.map((x, i) => `<tr style="${x.active ? '' : 'opacity:.55'}">
     <td>${fa(i + 1)}</td><td><b>${esc(x.name)}</b>${x.discount ? ` <span class="off10">${fa(x.discount)}٪</span>` : ''}${x.note ? `<div class="muted" style="font-size:11px">${esc(x.note)}</div>` : ''}${x.active ? '' : '<div class="muted" style="font-size:11px">غیرفعال</div>'}</td>
     <td><input dir="ltr" value="${esc(x.phone || '')}" placeholder="09..." style="width:135px" onchange="setStudent(${x.id},'phone',this.value)"></td>
     <td>${availRows(x)}</td>
-    <td><input value="${esc(x.contact_note || '')}" placeholder="مثلاً: تماس گرفته شد، منتظر جواب" onchange="setStudent(${x.id},'contact_note',this.value)"></td>
-    <td><input type="number" min="0" max="100" value="${x.discount || 0}" style="width:62px;text-align:center" onchange="setStudent(${x.id},'discount',+this.value||0)"></td></tr>`).join('');
+    <td><input value="${esc(x.contact_note || '')}" placeholder="مثلاً: تماس گرفته شد، منتظر جواب" onchange="setStudent(${x.id},'contact_note',this.value)"></td></tr>`).join('');
 
 }
 async function setStudent(id, key, val) { await api('/api/students/' + id, 'PUT', { [key]: String(val || '').trim() }); const x = students.find(s => s.id === id); if (x) x[key] = String(val || '').trim(); toast('ذخیره شد', 'ok'); }
