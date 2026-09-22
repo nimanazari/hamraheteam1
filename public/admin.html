@@ -156,7 +156,7 @@
           <label><input type="checkbox" id="ui-stats" style="width:auto" onchange="saveUI()"> آمار بالای تخته</label>
           <p class="muted" style="font-size:12px;margin-top:8px">میان‌برها همیشه کار می‌کنند: Ctrl+Z برگرد · Ctrl+Y تکرار · Ctrl+C کپی کلاس باز · Ctrl+X بریدن · Ctrl+V چسباندن در روزی که موس رویش است · F تمام‌صفحه · L لیست</p></div>
         <div class="card" id="phones-card" style="grid-column:1/-1"><h3>📞 شماره‌ها و روز جلسه</h3>
-          <div class="row" style="margin-bottom:8px"><input id="ph-q" placeholder="جستجوی نام یا شماره..." style="width:240px" oninput="renderPhones()"><label><input type="checkbox" id="ph-only" style="width:auto" onchange="renderPhones()"> فقط کسانی که هنوز روز پیشنهادی ندارند</label><button class="btn ghost sm" onclick="exportPhones()">⬇️ اکسل</button></div>
+          <div class="row" style="margin-bottom:8px"><input id="ph-q" placeholder="جستجوی نام یا شماره..." style="width:240px" oninput="renderPhones()"><label><input type="checkbox" id="ph-only" style="width:auto" onchange="renderPhones()"> فقط بدون روز پیشنهادی</label><label><input type="checkbox" id="ph-off" style="width:auto" onchange="renderPhones()"> فقط دارای ۱۰٪ تخفیف</label><button class="btn ghost sm" onclick="exportPhones()">⬇️ اکسل</button></div>
           <p class="muted" style="font-size:12px">هر تغییر همان لحظه ذخیره می‌شود. روز جلسه را با کلیک روی تقویم انتخاب کنید.</p>
           <div style="overflow-x:auto"><table id="ph-table"></table></div></div>
         <div class="card" id="classes-card" style="grid-column:1/-1"><h3>🗂 کلاس‌های روی تخته</h3>
@@ -1128,7 +1128,7 @@ function renderStudents() {
   const list = students.filter(s => !q || s.name.includes(q) || (s.phone || '').includes(q));
   renderDupBanner('#s-dups', students, 'students');
   $('#s-table').innerHTML = `<tr><th>#</th><th>نام</th><th>شماره</th><th>روز پیشنهادی</th><th>مدرسه</th><th>وضعیت</th><th>کلاس‌ها</th><th></th></tr>` + list.map((s, i) => `<tr style="${s.active ? '' : 'opacity:.5'}">
-    <td>${fa(i + 1)}</td><td><b>${esc(s.name)}</b>${s.contact_note ? `<div class="muted" style="font-size:11px">${esc(s.contact_note)}</div>` : ''}</td><td dir="ltr">${esc(s.phone || '—')}</td><td>${availShort(s) || '<span class="muted">—</span>'}</td><td>${esc(schoolName(s.school_id)) || '<span class="muted">—</span>'}</td><td>${s.active ? '<span class="chip">فعال</span>' : `<span class="chip" style="background:#fee2e2">${esc(s.note || 'غیرفعال')}</span>`}</td>
+    <td>${fa(i + 1)}</td><td><b>${esc(s.name)}</b>${/۱۰%|10%/.test(s.contact_note || '') ? ' <span class="off10">۱۰٪</span>' : ''}${s.contact_note ? `<div class="muted" style="font-size:11px">${esc(s.contact_note)}</div>` : ''}</td><td dir="ltr">${esc(s.phone || '—')}</td><td>${availShort(s) || '<span class="muted">—</span>'}</td><td>${esc(schoolName(s.school_id)) || '<span class="muted">—</span>'}</td><td>${s.active ? '<span class="chip">فعال</span>' : `<span class="chip" style="background:#fee2e2">${esc(s.note || 'غیرفعال')}</span>`}</td>
     <td>${classes.filter(c => c.student_ids.includes(s.id)).map(c => `<span class="chip" style="background:${c.teacher_color}22;border-color:${c.teacher_color}55">${meta.days[c.day]} ${fa(c.start)} ${esc(c.teacher_name || '')}</span>`).join(' ')}</td>
     <td><button class="btn ghost sm" onclick="editStudent(${s.id})">ویرایش</button> <button class="btn ghost sm" onclick="del('students',${s.id})">حذف</button></td></tr>`).join('');
 }
@@ -1331,12 +1331,13 @@ function avEdit(id, i, key, val) { const a = availOf(students.find(s => s.id ===
 function renderPhones() {
   const t = $('#ph-table'); if (!t) return;
   const q = ($('#ph-q')?.value || '').trim(), only = $('#ph-only')?.checked;
-  const list = students.filter(x => (!q || x.name.includes(q) || (x.phone || '').includes(q)) && (!only || !availOf(x).length));
+  const off = $('#ph-off')?.checked;
+  const list = students.filter(x => (!q || x.name.includes(q) || (x.phone || '').includes(q)) && (!only || !availOf(x).length) && (!off || /۱۰%|10%/.test(x.contact_note || '')));
   t.innerHTML = `<tr><th>#</th><th>نام</th><th>شماره تماس</th><th>روز و ساعت پیشنهادی خانواده</th><th>توضیحات تماس</th></tr>` + list.map((x, i) => `<tr style="${x.active ? '' : 'opacity:.55'}">
     <td>${fa(i + 1)}</td><td><b>${esc(x.name)}</b>${x.note ? `<div class="muted" style="font-size:11px">${esc(x.note)}</div>` : ''}${x.active ? '' : '<div class="muted" style="font-size:11px">غیرفعال</div>'}</td>
     <td><input dir="ltr" value="${esc(x.phone || '')}" placeholder="09..." style="width:135px" onchange="setStudent(${x.id},'phone',this.value)"></td>
     <td>${availRows(x)}</td>
-    <td><input value="${esc(x.contact_note || '')}" placeholder="مثلاً: تماس گرفته شد، منتظر جواب" onchange="setStudent(${x.id},'contact_note',this.value)"></td></tr>`).join('');
+    <td>${/۱۰%|10%/.test(x.contact_note || '') ? '<span class="off10">۱۰٪</span>' : ''}<input value="${esc(x.contact_note || '')}" placeholder="مثلاً: تماس گرفته شد، منتظر جواب" onchange="setStudent(${x.id},'contact_note',this.value)" style="width:calc(100% - 42px)"></td></tr>`).join('');
 
 }
 async function setStudent(id, key, val) { await api('/api/students/' + id, 'PUT', { [key]: String(val || '').trim() }); const x = students.find(s => s.id === id); if (x) x[key] = String(val || '').trim(); toast('ذخیره شد', 'ok'); }

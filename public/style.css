@@ -646,3 +646,7 @@ body.dropping .drop-day.over .col-in{background:var(--accent-soft)}
 body.rs-ing,body.rs-ing *{cursor:ns-resize!important;user-select:none}
 .board .cls.resizing{z-index:40;outline:3px solid #fff;box-shadow:0 10px 26px rgba(0,0,0,.35);transition:none}
 .board .cls[data-live]::after{content:attr(data-live);position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);background:rgba(0,0,0,.6);color:#fff;font-size:12px;font-weight:800;padding:3px 9px;border-radius:8px;white-space:nowrap;z-index:5;font-variant-numeric:tabular-nums}
+
+/* 10% discount badge */
+.off10{display:inline-block;background:#dcfce7;color:#166534;border:1px solid #86efac;border-radius:999px;padding:0 6px;font-size:10.5px;font-weight:900;margin-left:5px;vertical-align:middle}
+:root[data-theme=dark] .off10{background:#14532d;color:#bbf7d0;border-color:#166534}
