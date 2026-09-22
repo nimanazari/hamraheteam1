@@ -496,3 +496,8 @@ body.fs .board{grid-template-columns:minmax(0,1fr) 260px}
 .ctx-i{padding:8px 10px;border-radius:8px;cursor:pointer;font-weight:600;font-size:13px}
 .ctx-i:hover{background:var(--soft)}
 .ctx-i.danger{color:var(--bad)}
+
+/* dragging: only the card, never a text selection */
+.tt,.tt .col,.cls,.cls *,.pool,.stu,.chip-in{user-select:none;-webkit-user-select:none;-webkit-user-drag:none}
+.cls,.stu,.chip-in,.item{-webkit-user-drag:element}
+.cls .inline-ed,.cls input{user-select:text;-webkit-user-select:text}

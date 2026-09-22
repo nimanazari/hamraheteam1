@@ -434,7 +434,7 @@ function bindDrops() {
     card.ondragover = e => { e.preventDefault(); e.stopPropagation(); card.classList.add('over'); };
     card.ondragleave = () => card.classList.remove('over');
     card.ondrop = e => { e.preventDefault(); e.stopPropagation(); card.classList.remove('over'); const col = card.closest('.drop-day'); col.classList.remove('over'); const item = JSON.parse(e.dataTransfer.getData('text/plain')); if (item.type === 'class') return col.ondrop(Object.assign(e, { _forwarded: true })); handleDrop(item, { cls: +card.dataset.cls }); };
-    card.ondragstart = e => { e.dataTransfer.setData('text/plain', JSON.stringify({ type: 'class', id: +card.dataset.cls })); card.classList.add('dragging'); };
+    card.ondragstart = e => { if (e.target !== card && e.target.closest('.chip-in')) return; e.dataTransfer.setData('text/plain', JSON.stringify({ type: 'class', id: +card.dataset.cls })); e.dataTransfer.effectAllowed = 'move'; try { const r = card.getBoundingClientRect(); e.dataTransfer.setDragImage(card, e.clientX - r.left, e.clientY - r.top); } catch {} card.classList.add('dragging'); };
     card.ondragend = () => card.classList.remove('dragging');
     card.onclick = e => { e.stopPropagation(); if (picked) { const p = picked; unpick(); return handleDrop(p, { cls: +card.dataset.cls }); } const was = card.classList.contains('open'); $$('.cls.open').forEach(x => x.classList.remove('open')); if (!was) card.classList.add('open'); };
     card.ondblclick = e => { e.stopPropagation(); openClass(+card.dataset.cls); };
