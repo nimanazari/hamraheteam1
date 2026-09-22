@@ -1342,8 +1342,9 @@ function availRows(x) {
 function slotBadge(a) {
   const cap = CAP(), r = demandRows().find(x => x.day === +a.day && (!a.start || (a.start <= x.start && (!a.end || a.end >= x.end))));
   if (!r) return '';
-  const free = cap - r.booked;
-  return `<b class="slotb ${r.vol.size > free ? 'bad' : ''}" title="داوطلب ${r.vol.size} · ثبت‌شده ${r.booked} · ظرفیت ${cap}">${fa(r.vol.size)}/${fa(Math.max(0, free))}</b>`;
+  const free = cap - r.booked, rows = demandRows();
+  const shaky = [...r.vol].filter(id => rows.filter(x => x.vol.has(id)).length > 1).length;
+  return `<b class="slotb ${r.vol.size > free ? 'bad' : ''}" title="داوطلب ${r.vol.size}${shaky ? ` (${shaky} نفر جای دیگری هم داوطلب‌اند)` : ''} · ثبت‌شده ${r.booked} · ظرفیت ${cap}">${fa(r.vol.size)}${shaky ? '<i>−' + fa(shaky) + '</i>' : ''}/${fa(Math.max(0, free))}</b>`;
 }
 function avAdd(id) { const a = availOf(students.find(s => s.id === id)); a.push({ day: 5, start: '10:00', end: '12:00', note: '' }); setAvail(id, a); }
 function avDel(id, i) { const a = availOf(students.find(s => s.id === id)); a.splice(i, 1); setAvail(id, a); }
@@ -1368,12 +1369,14 @@ function renderDemand() {
   const cap = CAP(), rows = demandRows();
   t.innerHTML = `<tr><th>روز</th><th>تایم</th><th>کلاس‌ها</th><th>ثبت‌شده</th><th>داوطلب</th><th>ظرفیت ${fa(cap)}</th></tr>` + (rows.map(r => {
     const free = cap - r.booked, over = r.vol.size > free;
+    // volunteers who also offered another slot — they may be taken off this one
+    const shaky = [...r.vol].filter(id => rows.filter(x => x.vol.has(id)).length > 1).length;
     const pct = Math.min(100, Math.round(r.booked / cap * 100));
     return `<tr class="${r.booked >= cap ? 'full' : over ? 'over' : ''}">
       <td>${meta.days[r.day]}</td><td>${fa(r.start)}–${fa(r.end)}</td>
       <td>${r.classes.map(c => `<span class="chip" style="border-color:${cardColor(c)}">${esc(c.teacher_name || c.school_name || 'کلاس')}</span>`).join(' ')}</td>
       <td><b>${fa(r.booked)}</b></td>
-      <td><b style="color:${over ? 'var(--bad)' : 'var(--ok)'}">${fa(r.vol.size)}</b></td>
+      <td><b style="color:${over ? 'var(--bad)' : 'var(--ok)'}">${fa(r.vol.size)}</b>${shaky ? ` <span class="minus" title="${fa(shaky)} نفرشان جای دیگری هم داوطلب‌اند و ممکن است از این تایم برداشته شوند">−${fa(shaky)}</span>` : ''}</td>
       <td><div class="bar"><i style="width:${pct}%;background:${r.booked >= cap ? 'var(--bad)' : 'var(--ok)'}"></i></div>${r.booked >= cap ? '<span class="muted">پر شد</span>' : `<span class="muted">${fa(free)} جای خالی</span>`}</td></tr>`;
   }).join('') || '<tr><td colspan="6" class="muted">کلاسی نیست</td></tr>');
 }

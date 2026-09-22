@@ -662,3 +662,7 @@ body.rs-ing,body.rs-ing *{cursor:ns-resize!important;user-select:none}
 .slotb.bad{background:#fee2e2;color:#991b1b}
 :root[data-theme=dark] .slotb{background:#14532d;color:#bbf7d0}
 :root[data-theme=dark] .slotb.bad{background:#3b1d24;color:#fca5a5}
+
+.minus{color:var(--bad);font-weight:900;font-size:11.5px;background:#fee2e2;border-radius:6px;padding:0 5px;cursor:help}
+:root[data-theme=dark] .minus{background:#3b1d24;color:#fca5a5}
+.slotb i{font-style:normal;opacity:.85}
