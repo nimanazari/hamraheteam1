@@ -45,6 +45,7 @@
         <datalist id="q-list"></datalist>
         <button class="btn ghost sm" id="q-clear" style="display:none" onclick="$('#f-q').value='';renderBoard()">✕ پاک کردن</button>
         <span class="grow"></span>
+        <button class="btn sm ghost" onclick="openAuto()" title="چیدن خودکار دانش‌آموزها بر اساس روز پیشنهادی خانواده">✨ چیدمان خودکار</button>
         <button class="btn sm" id="pool-btn" onclick="togglePool()">📚 لیست دبیر/دانش‌آموز</button>
       </div>
       <div id="board-stats"><div class="stats mini" id="stats"></div></div>
@@ -708,6 +709,79 @@ async function redo() {
 }
 async function refreshUndo() { try { const s = await api('/api/snapshots'); const b = $('#btn-undo'), r = $('#btn-redo'); if (b) b.disabled = !s.canUndo; if (r) r.disabled = !s.canRedo; const fu = $('#fab-undo'), fr = $('#fab-redo'); if (fu) { fu.disabled = !s.canUndo; fr.disabled = !s.canRedo; $('#undo-fab').style.display = (s.canUndo || s.canRedo) ? '' : 'none'; } } catch {} }
 
+/* ================= AUTO PLACEMENT =================
+   Fills the robotics slots from each family's suggested day/time.
+   Rules: at most `cap` students in the academy at any one time-slot,
+   and the slots of a day are filled as evenly as possible. */
+const slotKey = c => `${c.day}|${c.start}|${c.end}`;
+function fitsAvail(st, c) {
+  return availOf(st).some(a => +a.day === c.day && (!a.start || a.start <= c.start) && (!a.end || a.end >= c.end));
+}
+function autoPlan(days, cap, includePlaced) {
+  const slots = classes.filter(c => days.includes(c.day) && c.type !== 'public')
+    .map(c => ({ c, add: [], base: c.students.length }))
+    .sort((a, b) => a.c.day - b.c.day || a.c.start.localeCompare(b.c.start));
+  const timeLoad = {}; // day|start -> people in the academy at that time
+  slots.forEach(s => { const k = `${s.c.day}|${s.c.start}`; timeLoad[k] = (timeLoad[k] || 0) + s.base; });
+  const placedIds = new Set(classes.flatMap(c => c.student_ids));
+  const pool = students.filter(x => x.active && availOf(x).length && (includePlaced || !placedIds.has(x.id)));
+  const cands = new Map(pool.map(x => [x.id, slots.filter(sl => fitsAvail(x, sl.c))]));
+  // most constrained student first
+  const order = [...pool].sort((a, b) => cands.get(a.id).length - cands.get(b.id).length || a.name.localeCompare(b.name));
+  const left = [];
+  for (const st of order) {
+    const options = cands.get(st.id).filter(sl => (timeLoad[`${sl.c.day}|${sl.c.start}`] || 0) < cap && !sl.c.student_ids.includes(st.id));
+    if (!options.length) { left.push({ st, why: cands.get(st.id).length ? 'ظرفیت تایم‌های پیشنهادی‌اش پر شد' : 'هیچ کلاسی در روز/ساعت پیشنهادی‌اش نیست' }); continue; }
+    // balance: fewest people first, then the emptiest time of that day
+    options.sort((a, b) => (a.base + a.add.length) - (b.base + b.add.length) || (timeLoad[`${a.c.day}|${a.c.start}`] || 0) - (timeLoad[`${b.c.day}|${b.c.start}`] || 0));
+    const pick = options[0]; pick.add.push(st); timeLoad[`${pick.c.day}|${pick.c.start}`] = (timeLoad[`${pick.c.day}|${pick.c.start}`] || 0) + 1;
+  }
+  return { slots, left, timeLoad, pool };
+}
+let AUTO = null;
+function openAuto() {
+  const days = [5, 6];
+  openModal(`<div class="mbar"><span class="grow"></span><button class="btn ghost sm" onclick="closeModal()">بستن</button><button class="btn save" id="auto-apply" onclick="applyAuto()" disabled>✅ اعمال روی برنامه</button></div>
+    <div class="mbody"><h2 style="margin:0 0 4px">✨ چیدمان خودکار</h2>
+    <p class="muted" style="font-size:12px">دانش‌آموزها بر اساس «روز و ساعت پیشنهادی خانواده» در کلاس‌های موجود همان روز پخش می‌شوند. سقف همزمانی آکادمی رعایت می‌شود و تایم‌های یک روز تا جای ممکن هم‌اندازه پر می‌شوند. تا وقتی «اعمال» نزنید چیزی ذخیره نمی‌شود.</p>
+    <div class="grid3">
+      <div class="field"><label>روزها</label><div class="row" style="gap:10px">${meta.days.map((d, i) => `<label class="chip" style="cursor:pointer"><input type="checkbox" class="au-day" value="${i}" ${days.includes(i) ? 'checked' : ''} style="width:auto;margin-left:4px">${d}</label>`).join('')}</div></div>
+      <div class="field"><label>حداکثر نفر در هر تایم آکادمی</label><input type="number" id="au-cap" value="20" min="1" max="200"></div>
+      <div class="field"><label>شامل چه کسانی</label><select id="au-inc"><option value="0">فقط دانش‌آموزهای بدون کلاس</option><option value="1">همه (حتی اگر کلاس دارند)</option></select></div>
+    </div>
+    <button class="btn" onclick="runAuto()">🔄 محاسبه</button>
+    <div id="auto-out" style="margin-top:12px"></div></div>`);
+  runAuto();
+}
+function runAuto() {
+  const days = $$('.au-day:checked').map(x => +x.value), cap = +$('#au-cap').value || 20, inc = $('#au-inc').value === '1';
+  if (!days.length) return toast('حداقل یک روز را انتخاب کنید', 'bad');
+  AUTO = autoPlan(days, cap, inc); AUTO.cap = cap;
+  const { slots, left } = AUTO;
+  const total = slots.reduce((a, s) => a + s.add.length, 0);
+  const byDay = {};
+  slots.forEach(s => { (byDay[s.c.day] = byDay[s.c.day] || []).push(s); });
+  $('#auto-apply').disabled = !total;
+  $('#auto-out').innerHTML = `<div class="sr"><div class="sr-h">${total ? `✅ <b>${fa(total)}</b> دانش‌آموز چیده می‌شود` : 'کسی برای چیدن پیدا نشد'}${left.length ? ` · ⚠️ ${fa(left.length)} نفر جا نشدند` : ''}</div></div>
+    ${Object.keys(byDay).map(d => `<div class="card" style="margin-bottom:10px"><h3>${meta.days[d]}</h3><table><tr><th>تایم</th><th>محل</th><th>قبلاً</th><th>اضافه می‌شود</th><th>جمع</th><th>نفرات جدید</th></tr>
+      ${byDay[d].map(s => `<tr><td>${fa(s.c.start)}–${fa(s.c.end)}</td><td>${esc(s.c.school_name || '—')}</td><td>${fa(s.base)}</td><td><b style="color:var(--ok)">+${fa(s.add.length)}</b></td><td><b>${fa(s.base + s.add.length)}</b></td>
+        <td>${s.add.map(x => `<span class="chip">${esc(x.name)}</span>`).join(' ') || '<span class="muted">—</span>'}</td></tr>`).join('')}
+      <tr><td colspan="4"><b>همزمان در آکادمی</b></td><td colspan="2">${[...new Set(byDay[d].map(s => s.c.start))].sort().map(t => { const n = byDay[d].filter(s => s.c.start === t).reduce((a, s) => a + s.base + s.add.length, 0); return `<span class="chip" style="${n > AUTO.cap ? 'background:#fee2e2' : ''}">${fa(t)}: ${fa(n)} نفر</span>`; }).join(' ')}</td></tr></table></div>`).join('')}
+    ${left.length ? `<div class="card"><h3>جا نشدند (${fa(left.length)})</h3>${left.map(l => `<div style="font-size:12.5px;padding:3px 0;border-bottom:1px solid var(--line)"><b>${esc(l.st.name)}</b> <span class="muted">— ${l.why} · پیشنهاد: ${esc(availShort(l.st)) || '—'}${l.st.phone ? ' · ' + esc(l.st.phone) : ''}</span></div>`).join('')}</div>` : ''}`;
+}
+async function applyAuto() {
+  if (!AUTO) return;
+  const jobs = AUTO.slots.filter(s => s.add.length);
+  if (!jobs.length) return;
+  if (!confirm(`${fa(jobs.reduce((a, s) => a + s.add.length, 0))} دانش‌آموز به ${fa(jobs.length)} کلاس اضافه شوند؟ (با ↶ قابل برگشت است)`)) return;
+  $('#auto-apply').disabled = true; $('#auto-apply').textContent = 'در حال اعمال...';
+  await api('/api/snapshots', 'POST', { label: 'قبل از چیدمان خودکار' });
+  for (const s of jobs) {
+    const body = bodyOf(s.c); body.student_ids = [...new Set([...body.student_ids, ...s.add.map(x => x.id)])];
+    await api('/api/classes/' + s.c.id, 'PUT', { ...body, force: true });
+  }
+  closeModal(); toastUndo('چیدمان خودکار اعمال شد'); reloadClasses();
+}
 async function openHistory() {
   const s = await api('/api/snapshots');
   const KIND = { auto: 'خودکار', manual: 'دستی', restore: 'قبل از بازگردانی' };
